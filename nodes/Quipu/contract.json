@@ -1,0 +1,2803 @@
+{
+  "source": "https://quipuapp.github.io/api-v1-docs/openapi.yaml",
+  "retrieved": "2026-11-03",
+  "operationIds": [
+    "createAccessToken",
+    "getUser",
+    "listContacts",
+    "createContact",
+    "getContact",
+    "updateContact",
+    "deleteContact",
+    "listBookEntries",
+    "listInvoices",
+    "createInvoice",
+    "getInvoice",
+    "updateInvoice",
+    "deleteInvoice",
+    "downloadInvoicePdf",
+    "ephemeralOpenDownloadInvoicePdf",
+    "listSimplifiedInvoices",
+    "createSimplifiedInvoice",
+    "getSimplifiedInvoice",
+    "updateSimplifiedInvoice",
+    "deleteSimplifiedInvoice",
+    "downloadSimplifiedInvoicePdf",
+    "ephemeralOpenDownloadSimplifiedInvoicePdf",
+    "listAdditionalIncomes",
+    "createAdditionalIncome",
+    "getAdditionalIncome",
+    "updateAdditionalIncome",
+    "deleteAdditionalIncome",
+    "downloadAdditionalIncomePdf",
+    "ephemeralOpenDownloadAdditionalIncomePdf",
+    "listPaysheets",
+    "createPaysheet",
+    "getPaysheet",
+    "updatePaysheet",
+    "deletePaysheet",
+    "listNumberingSeries",
+    "createNumberingSeries",
+    "getNumberingSeries",
+    "updateNumberingSeries",
+    "deleteNumberingSeries",
+    "listAccountingCategories",
+    "getAccountingCategory",
+    "listAccountingSubcategories",
+    "createAccountingSubcategory",
+    "getAccountingSubcategory",
+    "updateAccountingSubcategory",
+    "deleteAccountingSubcategory",
+    "createAttachment",
+    "getAttachment",
+    "deleteAttachment"
+  ],
+  "resources": {
+    "users": {
+      "name": "users",
+      "operations": {
+        "get": {
+          "operationId": "getUser",
+          "method": "GET",
+          "path": "/users/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        }
+      }
+    },
+    "contacts": {
+      "name": "contacts",
+      "operations": {
+        "getAll": {
+          "operationId": "listContacts",
+          "method": "GET",
+          "path": "/{owner_slug}/contacts",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "page[number]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Page number (1-indexed)"
+            },
+            {
+              "name": "page[size]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Number of results per page"
+            },
+            {
+              "name": "filter[kind]",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "client",
+                "supplier",
+                "employee"
+              ],
+              "required": false,
+              "description": "Filter by contact kind"
+            },
+            {
+              "name": "filter[tax_id]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by tax ID"
+            },
+            {
+              "name": "filter[country]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by country code (comma-separated for multiple)"
+            },
+            {
+              "name": "filter[email]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by email address"
+            },
+            {
+              "name": "filter[q]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Free-text search across contact fields"
+            },
+            {
+              "name": "sort",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "name",
+                "-name",
+                "total_paid_income",
+                "-total_paid_income",
+                "total_unpaid_income",
+                "-total_unpaid_income",
+                "total_paid_expenses",
+                "-total_paid_expenses",
+                "total_unpaid_expenses",
+                "-total_unpaid_expenses"
+              ],
+              "required": false,
+              "description": "Sort field (prefix with `-` for descending)"
+            }
+          ]
+        },
+        "create": {
+          "operationId": "createContact",
+          "method": "POST",
+          "path": "/{owner_slug}/contacts",
+          "description": "",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "nullable": false,
+              "required": true
+            },
+            {
+              "name": "tax_id",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "phone",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "email",
+              "type": "string",
+              "nullable": false,
+              "format": "email",
+              "required": false
+            },
+            {
+              "name": "address",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "town",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "zip_code",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "country_code",
+              "type": "string",
+              "nullable": false,
+              "required": true
+            },
+            {
+              "name": "client_number",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "supplier_number",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "employee_number",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "a3_nom_id",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "is_supplier_of_direct_goods",
+              "type": "boolean",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "bank_account_number",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "bank_account_swift_bic",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "document_type",
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "NIF",
+                "passport",
+                "official_id_from_residence_country",
+                "residence_permit",
+                "other",
+                "none",
+                null
+              ],
+              "description": "Type of identification document for `tax_id`. See the Contacts section for validation rules.",
+              "required": false
+            },
+            {
+              "name": "pdf_language",
+              "type": "string",
+              "nullable": false,
+              "description": "Language used when rendering PDF documents for this contact.",
+              "required": false
+            },
+            {
+              "name": "incomes_due_date",
+              "type": "string",
+              "nullable": false,
+              "description": "Default due-date preference applied to income documents issued to this contact.",
+              "required": false
+            },
+            {
+              "name": "incomes_payment_method",
+              "type": "string",
+              "nullable": false,
+              "description": "Default payment method applied to income documents issued to this contact.",
+              "required": false
+            },
+            {
+              "name": "equivalence_subcharge",
+              "type": "boolean",
+              "nullable": false,
+              "description": "Whether equivalence surcharge applies by default for this contact.",
+              "required": false
+            },
+            {
+              "name": "expenses_payment_method",
+              "type": "string",
+              "nullable": false,
+              "description": "Default payment method applied to expense documents received from this contact.",
+              "required": false
+            },
+            {
+              "name": "expenses_due_date",
+              "type": "string",
+              "nullable": false,
+              "description": "Default due-date preference applied to expense documents received from this contact.",
+              "required": false
+            },
+            {
+              "name": "contact_analytic_value_ids",
+              "type": "string",
+              "nullable": false,
+              "description": "Comma-separated list of analytic value IDs to associate with the contact (e.g. \"12,34\").",
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "expense_category",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "expense_subcategory",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "income_category",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "income_subcategory",
+              "nullable": true,
+              "multiple": false
+            }
+          ],
+          "parameters": []
+        },
+        "get": {
+          "operationId": "getContact",
+          "method": "GET",
+          "path": "/{owner_slug}/contacts/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "update": {
+          "operationId": "updateContact",
+          "method": "PATCH",
+          "path": "/{owner_slug}/contacts/{id}",
+          "description": "",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "tax_id",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "phone",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "email",
+              "type": "string",
+              "nullable": false,
+              "format": "email",
+              "required": false
+            },
+            {
+              "name": "address",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "town",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "zip_code",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "country_code",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "client_number",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "supplier_number",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "employee_number",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "a3_nom_id",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "is_supplier_of_direct_goods",
+              "type": "boolean",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "bank_account_number",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "bank_account_swift_bic",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "document_type",
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "NIF",
+                "passport",
+                "official_id_from_residence_country",
+                "residence_permit",
+                "other",
+                "none",
+                null
+              ],
+              "description": "Type of identification document for `tax_id`. See the Contacts section for validation rules.",
+              "required": false
+            },
+            {
+              "name": "pdf_language",
+              "type": "string",
+              "nullable": false,
+              "description": "Language used when rendering PDF documents for this contact.",
+              "required": false
+            },
+            {
+              "name": "incomes_due_date",
+              "type": "string",
+              "nullable": false,
+              "description": "Default due-date preference applied to income documents issued to this contact.",
+              "required": false
+            },
+            {
+              "name": "incomes_payment_method",
+              "type": "string",
+              "nullable": false,
+              "description": "Default payment method applied to income documents issued to this contact.",
+              "required": false
+            },
+            {
+              "name": "equivalence_subcharge",
+              "type": "boolean",
+              "nullable": false,
+              "description": "Whether equivalence surcharge applies by default for this contact.",
+              "required": false
+            },
+            {
+              "name": "expenses_payment_method",
+              "type": "string",
+              "nullable": false,
+              "description": "Default payment method applied to expense documents received from this contact.",
+              "required": false
+            },
+            {
+              "name": "expenses_due_date",
+              "type": "string",
+              "nullable": false,
+              "description": "Default due-date preference applied to expense documents received from this contact.",
+              "required": false
+            },
+            {
+              "name": "contact_analytic_value_ids",
+              "type": "string",
+              "nullable": false,
+              "description": "Comma-separated list of analytic value IDs to associate with the contact (e.g. \"12,34\").",
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "expense_category",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "expense_subcategory",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "income_category",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "income_subcategory",
+              "nullable": true,
+              "multiple": false
+            }
+          ],
+          "parameters": []
+        },
+        "delete": {
+          "operationId": "deleteContact",
+          "method": "DELETE",
+          "path": "/{owner_slug}/contacts/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        }
+      }
+    },
+    "book_entries": {
+      "name": "book_entries",
+      "operations": {
+        "getAll": {
+          "operationId": "listBookEntries",
+          "method": "GET",
+          "path": "/{owner_slug}/book_entries",
+          "description": "Returns a paginated list of all book entries including invoices,\ntickets, simplified invoices, additional income, and paysheets.\n",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "page[number]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Page number (1-indexed)"
+            },
+            {
+              "name": "page[size]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Number of results per page"
+            },
+            {
+              "name": "include",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Comma-separated list of related resources to embed in the `included`\narray (JSON:API sideloading). Allowed values: `items`, `contact`,\n`accounting_category`, `accounting_subcategory`, `items.accounting_category`,\n`items.accounting_subcategory`.\nExample: `?include=items,contact`.\n\nWhen both `items` and `accounting_category`/`accounting_subcategory`\nare requested together, each item's own accounting category/subcategory\nis also embedded in `included` whenever it differs from the book\nentry's own default — no separate include value needed. The explicit\nnested form (`?include=items.accounting_category`, `?include=items.accounting_subcategory`)\nis also accepted for clients that prefer to request it directly.\n"
+            },
+            {
+              "name": "with_detailed_amounts",
+              "type": "boolean",
+              "nullable": false,
+              "required": false,
+              "description": "Include the `detailed_amounts` breakdown object in each entry. Presence of the parameter is enough — any value (including empty) enables it.\n"
+            },
+            {
+              "name": "filter[type]",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "invoices",
+                "tickets",
+                "paysheets",
+                "additional_incomes"
+              ],
+              "required": false,
+              "description": "Filter by entry type"
+            },
+            {
+              "name": "filter[kind]",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "expenses",
+                "income"
+              ],
+              "required": false,
+              "description": "Filter by kind (expenses or income)"
+            },
+            {
+              "name": "filter[q]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Free-text search"
+            },
+            {
+              "name": "filter[period]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by period (e.g. \"2024Q1\", \"2024-01\")"
+            },
+            {
+              "name": "filter[operation_date]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter income documents by `operation_date`. Accepts a whole year (`2024` or, equivalently, `2024-all`), a quarter (`2024-Q1`), a month (`2024-3`, without a leading zero) or `all` (any date, i.e. no restriction). For an explicit range, send `filter[operation_date][from]` and `filter[operation_date][to]` instead. Documents without an operation date are matched by their `issue_date`, and drafts that have no `issue_date` yet are always included, as are additional incomes (operation date does not apply to them). Only applied together with `filter[kind]=income`; ignored otherwise.\n"
+            },
+            {
+              "name": "filter[operation_date][from]",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": false,
+              "description": "Start of an explicit `operation_date` range (inclusive). Must be sent together with `filter[operation_date][to]`; follows the same rules as `filter[operation_date]`.\n"
+            },
+            {
+              "name": "filter[operation_date][to]",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": false,
+              "description": "End of an explicit `operation_date` range (inclusive). Must be sent together with `filter[operation_date][from]`; follows the same rules as `filter[operation_date]`.\n"
+            },
+            {
+              "name": "filter[payment_status]",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "paid",
+                "unpaid",
+                "due",
+                "pending"
+              ],
+              "required": false,
+              "description": "Filter by payment status. Note: `unpaid` includes both `pending` and overdue entries."
+            },
+            {
+              "name": "filter[contact_id]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by contact ID"
+            },
+            {
+              "name": "filter[validation_status]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by validation status"
+            },
+            {
+              "name": "filter[field_query][field]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Field name for field-level query filter"
+            },
+            {
+              "name": "filter[field_query][term]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Search term for field-level query filter"
+            },
+            {
+              "name": "sort",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "number",
+                "-number",
+                "issue_date",
+                "-issue_date",
+                "counterpart_name",
+                "-counterpart_name",
+                "total_amount",
+                "-total_amount",
+                "total_amount_without_taxes",
+                "-total_amount_without_taxes"
+              ],
+              "required": false,
+              "description": "Sort field (prefix with `-` for descending)"
+            }
+          ]
+        }
+      }
+    },
+    "invoices": {
+      "name": "invoices",
+      "operations": {
+        "getAll": {
+          "operationId": "listInvoices",
+          "method": "GET",
+          "path": "/{owner_slug}/invoices",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "page[number]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Page number (1-indexed)"
+            },
+            {
+              "name": "page[size]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Number of results per page"
+            },
+            {
+              "name": "include",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Comma-separated list of related resources to embed in the `included`\narray (JSON:API sideloading). Allowed values: `items`, `contact`,\n`accounting_category`, `accounting_subcategory`, `items.accounting_category`,\n`items.accounting_subcategory`.\nExample: `?include=items,contact`.\n\nWhen both `items` and `accounting_category`/`accounting_subcategory`\nare requested together, each item's own accounting category/subcategory\nis also embedded in `included` whenever it differs from the invoice's\nown default — no separate include value needed. The explicit nested\nform (`?include=items.accounting_category`, `?include=items.accounting_subcategory`) is\nalso accepted for clients that prefer to request it directly.\n"
+            },
+            {
+              "name": "filter[kind]",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "expenses",
+                "income"
+              ],
+              "required": false,
+              "description": "Filter by kind (expenses or income)"
+            },
+            {
+              "name": "filter[q]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Free-text search"
+            },
+            {
+              "name": "filter[period]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by period (e.g. \"2024Q1\", \"2024-01\")"
+            },
+            {
+              "name": "filter[operation_date]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter income documents by `operation_date`. Accepts a whole year (`2024` or, equivalently, `2024-all`), a quarter (`2024-Q1`), a month (`2024-3`, without a leading zero) or `all` (any date, i.e. no restriction). For an explicit range, send `filter[operation_date][from]` and `filter[operation_date][to]` instead. Documents without an operation date are matched by their `issue_date`, and drafts that have no `issue_date` yet are always included, as are additional incomes (operation date does not apply to them). Only applied together with `filter[kind]=income`; ignored otherwise.\n"
+            },
+            {
+              "name": "filter[operation_date][from]",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": false,
+              "description": "Start of an explicit `operation_date` range (inclusive). Must be sent together with `filter[operation_date][to]`; follows the same rules as `filter[operation_date]`.\n"
+            },
+            {
+              "name": "filter[operation_date][to]",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": false,
+              "description": "End of an explicit `operation_date` range (inclusive). Must be sent together with `filter[operation_date][from]`; follows the same rules as `filter[operation_date]`.\n"
+            },
+            {
+              "name": "filter[payment_status]",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "paid",
+                "unpaid",
+                "due",
+                "pending"
+              ],
+              "required": false,
+              "description": "Filter by payment status. Note: `unpaid` includes both `pending` and overdue entries."
+            },
+            {
+              "name": "filter[validation_status]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by validation status"
+            },
+            {
+              "name": "filter[contact_id]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by contact ID"
+            },
+            {
+              "name": "filter[field_query][field]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Field name for field-level query filter"
+            },
+            {
+              "name": "filter[field_query][term]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Search term for field-level query filter"
+            }
+          ]
+        },
+        "create": {
+          "operationId": "createInvoice",
+          "method": "POST",
+          "path": "/{owner_slug}/invoices",
+          "description": "",
+          "attributes": [
+            {
+              "name": "kind",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "income",
+                "expenses"
+              ],
+              "description": "Whether this is an income or expense invoice (REQUIRED)",
+              "required": true
+            },
+            {
+              "name": "issue_date",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "description": "Issue date (REQUIRED)",
+              "required": false
+            },
+            {
+              "name": "operation_date",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "description": "Date on which the operation took place (delivery of goods or provision of services). It must be on or before `issue_date`. Optional: on creation it defaults to `issue_date` when not sent (drafts without `issue_date` get it once they are dated), and sending `null` resets it to `issue_date`. On update, leaving it out keeps the current value, even if `issue_date` changes. A date later than `issue_date` returns 422. Only applicable when `kind` is `income` (ignored for expenses). Unlike `issue_date`, it can still be changed once the invoice is finalized, and it is silently ignored once it has been sent to AEAT. Changing it returns 422 once the invoice has been exported to accounting, included in a submitted tax model or locked by the bookkeeper (for users other than the bookkeeper managing the account, locked documents ignore it — see the update endpoint). Credit notes take the operation date of the rectified invoice unless one is sent. For an invoice to an intracommunity contact (EU, outside Spain) it is required: omitting it or sending `null` returns 422, unless the account is managed by the API user or belongs to a bookkeeper.",
+              "required": false
+            },
+            {
+              "name": "number",
+              "type": "string",
+              "nullable": true,
+              "description": "Invoice number. For outbound (income) invoices this is the internal filing number/reference; for inbound (expense) invoices this is the supplier's own external reference. `complete_number` takes priority over `number` when both are sent.",
+              "required": false
+            },
+            {
+              "name": "complete_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Full invoice number including prefix (e.g. \"INV-2024-001\"), authoritative when present. For outbound invoices, sets the invoice's internal number directly (overriding `number` if both are sent). For inbound invoices, sets the internal number while `number` is stored as the supplier's external reference.",
+              "required": false
+            },
+            {
+              "name": "filing_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Legacy per-numeration-series ordinal (a positive integer, sent as a string). Only meaningful together with an explicit numeration series: the final `number` is then derived from the series prefix plus this ordinal. A non-integer value is treated the same as `number`. Distinct from `complete_number`, which replaces `number` itself rather than this series-ordinal role. Kept for backward compatibility with historical/manually-numbered entries; prefer `number` / `complete_number` otherwise. Only accepted on creation — ignored if sent on an update.",
+              "required": false
+            },
+            {
+              "name": "due_dates",
+              "type": "array",
+              "nullable": false,
+              "required": false,
+              "itemType": "string",
+              "itemFormat": "date"
+            },
+            {
+              "name": "due_date_intervals",
+              "type": "array",
+              "nullable": false,
+              "description": "Due date intervals in days from issue date",
+              "required": false,
+              "itemType": "integer"
+            },
+            {
+              "name": "paid_at",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "payment_method",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "tags",
+              "type": "string",
+              "nullable": false,
+              "description": "Comma-separated list of tag names (e.g. \"vip client,important\").",
+              "required": false
+            },
+            {
+              "name": "notes",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "last_sent_at",
+              "type": "integer",
+              "nullable": true,
+              "description": "Unix timestamp in seconds of the last time the invoice was sent. Responses return this field as an ISO 8601 date-time string.",
+              "required": false
+            },
+            {
+              "name": "equivalence_surcharge",
+              "type": "boolean",
+              "nullable": false,
+              "description": "Whether equivalence surcharge applies",
+              "required": false
+            },
+            {
+              "name": "credit_note_reason",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "R1",
+                "R2",
+                "R3",
+                "R4",
+                "R5",
+                "R6",
+                "R7",
+                "R8"
+              ],
+              "description": "Reason code for credit notes",
+              "required": false
+            },
+            {
+              "name": "exempt_reason",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "R1",
+                "R2",
+                "R3"
+              ],
+              "description": "Reason code for VAT exemption",
+              "required": false
+            },
+            {
+              "name": "collection_type",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "R1",
+                "R2",
+                "R3",
+                "R4",
+                "none"
+              ],
+              "description": "Collection type",
+              "required": false
+            },
+            {
+              "name": "canary_island_special_zone",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "r1",
+                "r2",
+                "r3",
+                "none"
+              ],
+              "description": "Canary Island special zone indicator. Required for Canary Island owners when all items have 0% VAT.",
+              "required": false
+            },
+            {
+              "name": "account_number_and_swift_bic",
+              "type": "string",
+              "nullable": false,
+              "description": "Bank account number and SWIFT/BIC code",
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "contact",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "numeration",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_category",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_subcategory",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "attachments",
+              "nullable": false,
+              "multiple": true
+            },
+            {
+              "name": "project",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "book_entry_draft",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "items",
+              "nullable": false,
+              "multiple": true
+            }
+          ],
+          "parameters": []
+        },
+        "get": {
+          "operationId": "getInvoice",
+          "method": "GET",
+          "path": "/{owner_slug}/invoices/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "include",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Comma-separated list of related resources to embed in the `included`\narray (JSON:API sideloading). Allowed values: `items`, `contact`,\n`accounting_category`, `accounting_subcategory`, `items.accounting_category`,\n`items.accounting_subcategory`.\nExample: `?include=items,contact`.\n\nWhen both `items` and `accounting_category`/`accounting_subcategory`\nare requested together, each item's own accounting category/subcategory\nis also embedded in `included` whenever it differs from the invoice's\nown default — no separate include value needed. The explicit nested\nform (`?include=items.accounting_category`, `?include=items.accounting_subcategory`) is\nalso accepted for clients that prefer to request it directly.\n"
+            }
+          ]
+        },
+        "update": {
+          "operationId": "updateInvoice",
+          "method": "PATCH",
+          "path": "/{owner_slug}/invoices/{id}",
+          "description": "Partial update: every attribute is optional, and attributes and relationships that are not sent are left unchanged. `kind` cannot be changed. Some relationships replace existing data when sent: `items` replaces the whole item list (see the item `id`), `attachments` replaces all attachments, and `accounting_category` resets `accounting_subcategory` unless `accounting_subcategory` is sent in the same request. Blocked documents only accept the `payment_method`, `notes` and `tags` attributes. Once an income document is finalized (`stage` `final` or later), `issue_date`, `items` and `contact` are silently ignored (the response is still 200), and once it has been sent to AEAT, `numeration` and `operation_date` are ignored too.\n",
+          "attributes": [
+            {
+              "name": "kind",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "income",
+                "expenses"
+              ],
+              "description": "Whether this is an income or expense invoice (REQUIRED)",
+              "required": false
+            },
+            {
+              "name": "issue_date",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "description": "Issue date (REQUIRED)",
+              "required": false
+            },
+            {
+              "name": "operation_date",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "description": "Date on which the operation took place (delivery of goods or provision of services). It must be on or before `issue_date`. Optional: on creation it defaults to `issue_date` when not sent (drafts without `issue_date` get it once they are dated), and sending `null` resets it to `issue_date`. On update, leaving it out keeps the current value, even if `issue_date` changes. A date later than `issue_date` returns 422. Only applicable when `kind` is `income` (ignored for expenses). Unlike `issue_date`, it can still be changed once the invoice is finalized, and it is silently ignored once it has been sent to AEAT. Changing it returns 422 once the invoice has been exported to accounting, included in a submitted tax model or locked by the bookkeeper (for users other than the bookkeeper managing the account, locked documents ignore it — see the update endpoint). Credit notes take the operation date of the rectified invoice unless one is sent. For an invoice to an intracommunity contact (EU, outside Spain) it is required: omitting it or sending `null` returns 422, unless the account is managed by the API user or belongs to a bookkeeper.",
+              "required": false
+            },
+            {
+              "name": "number",
+              "type": "string",
+              "nullable": true,
+              "description": "Invoice number. For outbound (income) invoices this is the internal filing number/reference; for inbound (expense) invoices this is the supplier's own external reference. `complete_number` takes priority over `number` when both are sent.",
+              "required": false
+            },
+            {
+              "name": "complete_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Full invoice number including prefix (e.g. \"INV-2024-001\"), authoritative when present. For outbound invoices, sets the invoice's internal number directly (overriding `number` if both are sent). For inbound invoices, sets the internal number while `number` is stored as the supplier's external reference.",
+              "required": false
+            },
+            {
+              "name": "filing_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Legacy per-numeration-series ordinal (a positive integer, sent as a string). Only meaningful together with an explicit numeration series: the final `number` is then derived from the series prefix plus this ordinal. A non-integer value is treated the same as `number`. Distinct from `complete_number`, which replaces `number` itself rather than this series-ordinal role. Kept for backward compatibility with historical/manually-numbered entries; prefer `number` / `complete_number` otherwise. Only accepted on creation — ignored if sent on an update.",
+              "required": false
+            },
+            {
+              "name": "due_dates",
+              "type": "array",
+              "nullable": false,
+              "required": false,
+              "itemType": "string",
+              "itemFormat": "date"
+            },
+            {
+              "name": "due_date_intervals",
+              "type": "array",
+              "nullable": false,
+              "description": "Due date intervals in days from issue date",
+              "required": false,
+              "itemType": "integer"
+            },
+            {
+              "name": "paid_at",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "payment_method",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "tags",
+              "type": "string",
+              "nullable": false,
+              "description": "Comma-separated list of tag names (e.g. \"vip client,important\").",
+              "required": false
+            },
+            {
+              "name": "notes",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "last_sent_at",
+              "type": "integer",
+              "nullable": true,
+              "description": "Unix timestamp in seconds of the last time the invoice was sent. Responses return this field as an ISO 8601 date-time string.",
+              "required": false
+            },
+            {
+              "name": "equivalence_surcharge",
+              "type": "boolean",
+              "nullable": false,
+              "description": "Whether equivalence surcharge applies",
+              "required": false
+            },
+            {
+              "name": "credit_note_reason",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "R1",
+                "R2",
+                "R3",
+                "R4",
+                "R5",
+                "R6",
+                "R7",
+                "R8"
+              ],
+              "description": "Reason code for credit notes",
+              "required": false
+            },
+            {
+              "name": "exempt_reason",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "R1",
+                "R2",
+                "R3"
+              ],
+              "description": "Reason code for VAT exemption",
+              "required": false
+            },
+            {
+              "name": "collection_type",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "R1",
+                "R2",
+                "R3",
+                "R4",
+                "none"
+              ],
+              "description": "Collection type",
+              "required": false
+            },
+            {
+              "name": "canary_island_special_zone",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "r1",
+                "r2",
+                "r3",
+                "none"
+              ],
+              "description": "Canary Island special zone indicator. Required for Canary Island owners when all items have 0% VAT.",
+              "required": false
+            },
+            {
+              "name": "account_number_and_swift_bic",
+              "type": "string",
+              "nullable": false,
+              "description": "Bank account number and SWIFT/BIC code",
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "contact",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "numeration",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_category",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_subcategory",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "attachments",
+              "nullable": false,
+              "multiple": true
+            },
+            {
+              "name": "project",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "book_entry_draft",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "items",
+              "nullable": false,
+              "multiple": true
+            }
+          ],
+          "parameters": []
+        },
+        "delete": {
+          "operationId": "deleteInvoice",
+          "method": "DELETE",
+          "path": "/{owner_slug}/invoices/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "download": {
+          "operationId": "downloadInvoicePdf",
+          "method": "GET",
+          "path": "/{owner_slug}/invoices/{id}/download",
+          "description": "Returns the (outbound) invoice rendered as a PDF file.",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "downloadEphemeral": {
+          "operationId": "ephemeralOpenDownloadInvoicePdf",
+          "method": "GET",
+          "path": "/{owner_slug}/invoices/{id}/ephemeral_open_download",
+          "description": "Returns the invoice rendered as a PDF file using a short-lived, token-authenticated link instead of a Bearer token (see `ephemeral_open_download_pdf_url` on the invoice resource). Does not require authentication.\n",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "token",
+              "type": "string",
+              "nullable": false,
+              "required": true,
+              "description": "Ephemeral open-download token issued alongside the document."
+            }
+          ]
+        }
+      }
+    },
+    "simplified_invoices": {
+      "name": "simplified_invoices",
+      "operations": {
+        "getAll": {
+          "operationId": "listSimplifiedInvoices",
+          "method": "GET",
+          "path": "/{owner_slug}/simplified_invoices",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "page[number]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Page number (1-indexed)"
+            },
+            {
+              "name": "page[size]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Number of results per page"
+            },
+            {
+              "name": "include",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Comma-separated list of related resources to embed in the `included`\narray. Allowed values: `items`, `accounting_category`,\n`accounting_subcategory`, `items.accounting_category`,\n`items.accounting_subcategory`. Example: `?include=items`.\n\nWhen both `items` and `accounting_category`/`accounting_subcategory`\nare requested together, each item's own accounting category/subcategory\nis also embedded in `included` whenever it differs from the document's\nown default — no separate include value needed. The explicit nested\nform (`?include=items.accounting_category`, `?include=items.accounting_subcategory`) is\nalso accepted for clients that prefer to request it directly.\n"
+            },
+            {
+              "name": "filter[kind]",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "expenses",
+                "income"
+              ],
+              "required": false,
+              "description": "Filter by kind (expenses or income)"
+            },
+            {
+              "name": "filter[operation_date]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter income documents by `operation_date`. Accepts a whole year (`2024` or, equivalently, `2024-all`), a quarter (`2024-Q1`), a month (`2024-3`, without a leading zero) or `all` (any date, i.e. no restriction). For an explicit range, send `filter[operation_date][from]` and `filter[operation_date][to]` instead. Documents without an operation date are matched by their `issue_date`, and drafts that have no `issue_date` yet are always included, as are additional incomes (operation date does not apply to them). Only applied together with `filter[kind]=income`; ignored otherwise.\n"
+            },
+            {
+              "name": "filter[operation_date][from]",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": false,
+              "description": "Start of an explicit `operation_date` range (inclusive). Must be sent together with `filter[operation_date][to]`; follows the same rules as `filter[operation_date]`.\n"
+            },
+            {
+              "name": "filter[operation_date][to]",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": false,
+              "description": "End of an explicit `operation_date` range (inclusive). Must be sent together with `filter[operation_date][from]`; follows the same rules as `filter[operation_date]`.\n"
+            }
+          ]
+        },
+        "create": {
+          "operationId": "createSimplifiedInvoice",
+          "method": "POST",
+          "path": "/{owner_slug}/simplified_invoices",
+          "description": "",
+          "attributes": [
+            {
+              "name": "kind",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "income",
+                "expenses"
+              ],
+              "required": true
+            },
+            {
+              "name": "issue_date",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "operation_date",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "description": "Date on which the operation took place (delivery of goods or provision of services). It must be on or before `issue_date`. Optional: on creation it defaults to `issue_date` when not sent (drafts without `issue_date` get it once they are dated), and sending `null` resets it to `issue_date`. On update, leaving it out keeps the current value, even if `issue_date` changes. A date later than `issue_date` returns 422. Only applicable when `kind` is `income` (ignored for expenses). Unlike `issue_date`, it can still be changed once the simplified invoice is finalized, and it is silently ignored once it has been sent to AEAT. Changing it returns 422 once the simplified invoice has been exported to accounting, included in a submitted tax model or locked by the bookkeeper (for users other than the bookkeeper managing the account, locked documents ignore it — see the update endpoint). Credit notes take the operation date of the rectified simplified invoice unless one is sent.",
+              "required": false
+            },
+            {
+              "name": "number",
+              "type": "string",
+              "nullable": true,
+              "description": "Invoice number. For outbound (income) invoices this is the internal filing number/reference; for inbound (expense) invoices this is the supplier's own external reference. `complete_number` takes priority over `number` when both are sent.",
+              "required": false
+            },
+            {
+              "name": "complete_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Full simplified invoice number including prefix, authoritative when present (overrides `number` if both are sent).",
+              "required": false
+            },
+            {
+              "name": "filing_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Legacy per-numeration-series ordinal (a positive integer, sent as a string). Only meaningful together with an explicit numeration series: the final `number` is then derived from the series prefix plus this ordinal. A non-integer value is treated the same as `number`. Distinct from `complete_number`, which replaces `number` itself rather than this series-ordinal role. Kept for backward compatibility with historical/manually-numbered entries; prefer `number` / `complete_number` otherwise. Only accepted on creation — ignored if sent on an update.",
+              "required": false
+            },
+            {
+              "name": "due_dates",
+              "type": "array",
+              "nullable": false,
+              "required": false,
+              "itemType": "string",
+              "itemFormat": "date"
+            },
+            {
+              "name": "paid_at",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "payment_method",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "tags",
+              "type": "string",
+              "nullable": false,
+              "description": "Comma-separated list of tag names (e.g. \"vip client,important\").",
+              "required": false
+            },
+            {
+              "name": "notes",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "recipient_name",
+              "type": "string",
+              "nullable": false,
+              "description": "Recipient (customer) name. Applicable when `kind` is `income` (outbound).",
+              "required": false
+            },
+            {
+              "name": "target_country",
+              "type": "string",
+              "nullable": false,
+              "description": "Target country code. Applicable when `kind` is `income` (outbound).",
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "contact",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "numeration",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_category",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_subcategory",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "attachments",
+              "nullable": false,
+              "multiple": true
+            },
+            {
+              "name": "items",
+              "nullable": false,
+              "multiple": true
+            }
+          ],
+          "parameters": []
+        },
+        "get": {
+          "operationId": "getSimplifiedInvoice",
+          "method": "GET",
+          "path": "/{owner_slug}/simplified_invoices/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "include",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Comma-separated list of related resources to embed in the `included`\narray. Allowed values: `items`, `accounting_category`,\n`accounting_subcategory`, `items.accounting_category`,\n`items.accounting_subcategory`. Example: `?include=items`.\n\nWhen both `items` and `accounting_category`/`accounting_subcategory`\nare requested together, each item's own accounting category/subcategory\nis also embedded in `included` whenever it differs from the document's\nown default — no separate include value needed. The explicit nested\nform (`?include=items.accounting_category`, `?include=items.accounting_subcategory`) is\nalso accepted for clients that prefer to request it directly.\n"
+            }
+          ]
+        },
+        "update": {
+          "operationId": "updateSimplifiedInvoice",
+          "method": "PATCH",
+          "path": "/{owner_slug}/simplified_invoices/{id}",
+          "description": "Partial update: every attribute is optional, and attributes and relationships that are not sent are left unchanged. `kind` cannot be changed. Some relationships replace existing data when sent: `items` replaces the whole item list (see the item `id`), `attachments` replaces all attachments, and `accounting_category` resets `accounting_subcategory` unless `accounting_subcategory` is sent in the same request. Blocked documents only accept the `payment_method`, `notes` and `tags` attributes. Once an income document is finalized (`stage` `final` or later), `issue_date`, `items` and `contact` are silently ignored (the response is still 200), and once it has been sent to AEAT, `numeration` and `operation_date` are ignored too.\n",
+          "attributes": [
+            {
+              "name": "kind",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "income",
+                "expenses"
+              ],
+              "required": false
+            },
+            {
+              "name": "issue_date",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "operation_date",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "description": "Date on which the operation took place (delivery of goods or provision of services). It must be on or before `issue_date`. Optional: on creation it defaults to `issue_date` when not sent (drafts without `issue_date` get it once they are dated), and sending `null` resets it to `issue_date`. On update, leaving it out keeps the current value, even if `issue_date` changes. A date later than `issue_date` returns 422. Only applicable when `kind` is `income` (ignored for expenses). Unlike `issue_date`, it can still be changed once the simplified invoice is finalized, and it is silently ignored once it has been sent to AEAT. Changing it returns 422 once the simplified invoice has been exported to accounting, included in a submitted tax model or locked by the bookkeeper (for users other than the bookkeeper managing the account, locked documents ignore it — see the update endpoint). Credit notes take the operation date of the rectified simplified invoice unless one is sent.",
+              "required": false
+            },
+            {
+              "name": "number",
+              "type": "string",
+              "nullable": true,
+              "description": "Invoice number. For outbound (income) invoices this is the internal filing number/reference; for inbound (expense) invoices this is the supplier's own external reference. `complete_number` takes priority over `number` when both are sent.",
+              "required": false
+            },
+            {
+              "name": "complete_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Full simplified invoice number including prefix, authoritative when present (overrides `number` if both are sent).",
+              "required": false
+            },
+            {
+              "name": "filing_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Legacy per-numeration-series ordinal (a positive integer, sent as a string). Only meaningful together with an explicit numeration series: the final `number` is then derived from the series prefix plus this ordinal. A non-integer value is treated the same as `number`. Distinct from `complete_number`, which replaces `number` itself rather than this series-ordinal role. Kept for backward compatibility with historical/manually-numbered entries; prefer `number` / `complete_number` otherwise. Only accepted on creation — ignored if sent on an update.",
+              "required": false
+            },
+            {
+              "name": "due_dates",
+              "type": "array",
+              "nullable": false,
+              "required": false,
+              "itemType": "string",
+              "itemFormat": "date"
+            },
+            {
+              "name": "paid_at",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "payment_method",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "tags",
+              "type": "string",
+              "nullable": false,
+              "description": "Comma-separated list of tag names (e.g. \"vip client,important\").",
+              "required": false
+            },
+            {
+              "name": "notes",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "recipient_name",
+              "type": "string",
+              "nullable": false,
+              "description": "Recipient (customer) name. Applicable when `kind` is `income` (outbound).",
+              "required": false
+            },
+            {
+              "name": "target_country",
+              "type": "string",
+              "nullable": false,
+              "description": "Target country code. Applicable when `kind` is `income` (outbound).",
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "contact",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "numeration",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_category",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_subcategory",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "attachments",
+              "nullable": false,
+              "multiple": true
+            },
+            {
+              "name": "items",
+              "nullable": false,
+              "multiple": true
+            }
+          ],
+          "parameters": []
+        },
+        "delete": {
+          "operationId": "deleteSimplifiedInvoice",
+          "method": "DELETE",
+          "path": "/{owner_slug}/simplified_invoices/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "download": {
+          "operationId": "downloadSimplifiedInvoicePdf",
+          "method": "GET",
+          "path": "/{owner_slug}/simplified_invoices/{id}/download",
+          "description": "Returns the simplified invoice rendered as a PDF file.",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "downloadEphemeral": {
+          "operationId": "ephemeralOpenDownloadSimplifiedInvoicePdf",
+          "method": "GET",
+          "path": "/{owner_slug}/simplified_invoices/{id}/ephemeral_open_download",
+          "description": "Returns the simplified invoice rendered as a PDF file using a short-lived, token-authenticated link instead of a Bearer token (see `ephemeral_open_download_pdf_url` on the simplified invoice resource). Does not require authentication.\n",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "token",
+              "type": "string",
+              "nullable": false,
+              "required": true,
+              "description": "Ephemeral open-download token issued alongside the document."
+            }
+          ]
+        }
+      }
+    },
+    "additional_incomes": {
+      "name": "additional_incomes",
+      "operations": {
+        "getAll": {
+          "operationId": "listAdditionalIncomes",
+          "method": "GET",
+          "path": "/{owner_slug}/additional_incomes",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "page[number]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Page number (1-indexed)"
+            },
+            {
+              "name": "page[size]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Number of results per page"
+            },
+            {
+              "name": "include",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Comma-separated list of related resources to embed in the `included`\narray. Allowed values: `items`, `accounting_category`,\n`accounting_subcategory`, `items.accounting_category`,\n`items.accounting_subcategory`. Example: `?include=items`.\n\nWhen both `items` and `accounting_category`/`accounting_subcategory`\nare requested together, each item's own accounting category/subcategory\nis also embedded in `included` whenever it differs from the document's\nown default — no separate include value needed. The explicit nested\nform (`?include=items.accounting_category`, `?include=items.accounting_subcategory`) is\nalso accepted for clients that prefer to request it directly.\n"
+            }
+          ]
+        },
+        "create": {
+          "operationId": "createAdditionalIncome",
+          "method": "POST",
+          "path": "/{owner_slug}/additional_incomes",
+          "description": "",
+          "attributes": [
+            {
+              "name": "kind",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "income"
+              ],
+              "description": "Additional incomes are always outbound (income) documents — the API ignores this field's value and always creates an `income` (outbound) entry, even if `expenses` is sent.",
+              "required": false
+            },
+            {
+              "name": "issue_date",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": true
+            },
+            {
+              "name": "number",
+              "type": "string",
+              "nullable": true,
+              "required": false
+            },
+            {
+              "name": "complete_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Full additional income number including prefix, authoritative when present (overrides `number` if both are sent).",
+              "required": false
+            },
+            {
+              "name": "filing_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Legacy per-numeration-series ordinal (a positive integer, sent as a string). Only meaningful together with an explicit numeration series: the final `number` is then derived from the series prefix plus this ordinal. A non-integer value is treated the same as `number`. Distinct from `complete_number`, which replaces `number` itself rather than this series-ordinal role. Kept for backward compatibility with historical/manually-numbered entries; prefer `number` / `complete_number` otherwise. Only accepted on creation — ignored if sent on an update.",
+              "required": false
+            },
+            {
+              "name": "due_dates",
+              "type": "array",
+              "nullable": false,
+              "required": false,
+              "itemType": "string",
+              "itemFormat": "date"
+            },
+            {
+              "name": "paid_at",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "payment_method",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "tags",
+              "type": "string",
+              "nullable": false,
+              "description": "Comma-separated list of tag names (e.g. \"vip client,important\").",
+              "required": false
+            },
+            {
+              "name": "notes",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "recipient_name",
+              "type": "string",
+              "nullable": false,
+              "description": "Recipient (customer) name.",
+              "required": true
+            },
+            {
+              "name": "target_country",
+              "type": "string",
+              "nullable": false,
+              "description": "Target country code.",
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "numeration",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_category",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_subcategory",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "attachments",
+              "nullable": false,
+              "multiple": true
+            },
+            {
+              "name": "items",
+              "nullable": false,
+              "multiple": true
+            }
+          ],
+          "parameters": []
+        },
+        "get": {
+          "operationId": "getAdditionalIncome",
+          "method": "GET",
+          "path": "/{owner_slug}/additional_incomes/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "include",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Comma-separated list of related resources to embed in the `included`\narray. Allowed values: `items`, `accounting_category`,\n`accounting_subcategory`, `items.accounting_category`,\n`items.accounting_subcategory`. Example: `?include=items`.\n\nWhen both `items` and `accounting_category`/`accounting_subcategory`\nare requested together, each item's own accounting category/subcategory\nis also embedded in `included` whenever it differs from the document's\nown default — no separate include value needed. The explicit nested\nform (`?include=items.accounting_category`, `?include=items.accounting_subcategory`) is\nalso accepted for clients that prefer to request it directly.\n"
+            }
+          ]
+        },
+        "update": {
+          "operationId": "updateAdditionalIncome",
+          "method": "PATCH",
+          "path": "/{owner_slug}/additional_incomes/{id}",
+          "description": "Partial update: every attribute is optional, and attributes and relationships that are not sent are left unchanged. `kind` cannot be changed. Some relationships replace existing data when sent: `items` replaces the whole item list (see the item `id`), `attachments` replaces all attachments, and `accounting_category` resets `accounting_subcategory` unless `accounting_subcategory` is sent in the same request. Blocked documents only accept the `payment_method`, `notes` and `tags` attributes.\n",
+          "attributes": [
+            {
+              "name": "kind",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "income"
+              ],
+              "description": "Additional incomes are always outbound (income) documents — the API ignores this field's value and always creates an `income` (outbound) entry, even if `expenses` is sent.",
+              "required": false
+            },
+            {
+              "name": "issue_date",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "number",
+              "type": "string",
+              "nullable": true,
+              "required": false
+            },
+            {
+              "name": "complete_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Full additional income number including prefix, authoritative when present (overrides `number` if both are sent).",
+              "required": false
+            },
+            {
+              "name": "filing_number",
+              "type": "string",
+              "nullable": true,
+              "description": "Legacy per-numeration-series ordinal (a positive integer, sent as a string). Only meaningful together with an explicit numeration series: the final `number` is then derived from the series prefix plus this ordinal. A non-integer value is treated the same as `number`. Distinct from `complete_number`, which replaces `number` itself rather than this series-ordinal role. Kept for backward compatibility with historical/manually-numbered entries; prefer `number` / `complete_number` otherwise. Only accepted on creation — ignored if sent on an update.",
+              "required": false
+            },
+            {
+              "name": "due_dates",
+              "type": "array",
+              "nullable": false,
+              "required": false,
+              "itemType": "string",
+              "itemFormat": "date"
+            },
+            {
+              "name": "paid_at",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "payment_method",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "tags",
+              "type": "string",
+              "nullable": false,
+              "description": "Comma-separated list of tag names (e.g. \"vip client,important\").",
+              "required": false
+            },
+            {
+              "name": "notes",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "recipient_name",
+              "type": "string",
+              "nullable": false,
+              "description": "Recipient (customer) name.",
+              "required": false
+            },
+            {
+              "name": "target_country",
+              "type": "string",
+              "nullable": false,
+              "description": "Target country code.",
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "numeration",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_category",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_subcategory",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "attachments",
+              "nullable": false,
+              "multiple": true
+            },
+            {
+              "name": "items",
+              "nullable": false,
+              "multiple": true
+            }
+          ],
+          "parameters": []
+        },
+        "delete": {
+          "operationId": "deleteAdditionalIncome",
+          "method": "DELETE",
+          "path": "/{owner_slug}/additional_incomes/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "download": {
+          "operationId": "downloadAdditionalIncomePdf",
+          "method": "GET",
+          "path": "/{owner_slug}/additional_incomes/{id}/download",
+          "description": "Additional incomes never generate or expose a PDF, so this always returns `404`. The route exists for parity with the other book entry types.\n",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "downloadEphemeral": {
+          "operationId": "ephemeralOpenDownloadAdditionalIncomePdf",
+          "method": "GET",
+          "path": "/{owner_slug}/additional_incomes/{id}/ephemeral_open_download",
+          "description": "Additional incomes never generate or expose a PDF, so this always returns `404`. The route exists for parity with the other book entry types.\n",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "token",
+              "type": "string",
+              "nullable": false,
+              "required": true,
+              "description": "Ephemeral open-download token issued alongside the document."
+            }
+          ]
+        }
+      }
+    },
+    "paysheets": {
+      "name": "paysheets",
+      "operations": {
+        "getAll": {
+          "operationId": "listPaysheets",
+          "method": "GET",
+          "path": "/{owner_slug}/paysheets",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "page[number]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Page number (1-indexed)"
+            },
+            {
+              "name": "page[size]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Number of results per page"
+            },
+            {
+              "name": "include",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Comma-separated list of related resources to embed in the `included`\narray. Allowed values: `contact`, `accounting_category`,\n`accounting_subcategory`.\nExample: `?include=contact,accounting_subcategory`.\n"
+            }
+          ]
+        },
+        "create": {
+          "operationId": "createPaysheet",
+          "method": "POST",
+          "path": "/{owner_slug}/paysheets",
+          "description": "",
+          "attributes": [
+            {
+              "name": "kind",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "expenses"
+              ],
+              "description": "Paysheets are always inbound documents, so `kind` is always `expenses`.",
+              "required": false
+            },
+            {
+              "name": "issue_date",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": true
+            },
+            {
+              "name": "paid_at",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "payment_method",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "tags",
+              "type": "string",
+              "nullable": false,
+              "description": "Comma-separated list of tag names (e.g. \"vip client,important\").",
+              "required": false
+            },
+            {
+              "name": "net_pay",
+              "type": "number",
+              "nullable": false,
+              "description": "Net pay amount",
+              "required": false
+            },
+            {
+              "name": "employee_ss_amount",
+              "type": "number",
+              "nullable": false,
+              "description": "Employee social security amount",
+              "required": false
+            },
+            {
+              "name": "employee_retention",
+              "type": "number",
+              "nullable": false,
+              "description": "Employee retention amount",
+              "required": false
+            },
+            {
+              "name": "company_ss_amount",
+              "type": "number",
+              "nullable": false,
+              "description": "Company social security amount",
+              "required": false
+            },
+            {
+              "name": "account_number_and_swift_bic",
+              "type": "string",
+              "nullable": false,
+              "description": "Bank account number and SWIFT/BIC code",
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "contact",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "numeration",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_subcategory",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "project",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "book_entry_draft",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "attachments",
+              "nullable": false,
+              "multiple": true
+            },
+            {
+              "name": "items",
+              "nullable": false,
+              "multiple": true
+            }
+          ],
+          "parameters": []
+        },
+        "get": {
+          "operationId": "getPaysheet",
+          "method": "GET",
+          "path": "/{owner_slug}/paysheets/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "include",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Comma-separated list of related resources to embed in the `included`\narray. Allowed values: `contact`, `accounting_category`,\n`accounting_subcategory`.\nExample: `?include=contact,accounting_subcategory`.\n"
+            }
+          ]
+        },
+        "update": {
+          "operationId": "updatePaysheet",
+          "method": "PATCH",
+          "path": "/{owner_slug}/paysheets/{id}",
+          "description": "Partial update: every attribute is optional, and attributes and relationships that are not sent are left unchanged. Some relationships replace existing data when sent: `items` replaces the whole item list (see the item `id`) and `attachments` replaces all attachments. Blocked paysheets only accept the `payment_method` and `tags` attributes (plus `notes`, which is not accepted on paysheets otherwise).\n",
+          "attributes": [
+            {
+              "name": "kind",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "expenses"
+              ],
+              "description": "Paysheets are always inbound documents, so `kind` is always `expenses`.",
+              "required": false
+            },
+            {
+              "name": "issue_date",
+              "type": "string",
+              "nullable": false,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "paid_at",
+              "type": "string",
+              "nullable": true,
+              "format": "date",
+              "required": false
+            },
+            {
+              "name": "payment_method",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "tags",
+              "type": "string",
+              "nullable": false,
+              "description": "Comma-separated list of tag names (e.g. \"vip client,important\").",
+              "required": false
+            },
+            {
+              "name": "net_pay",
+              "type": "number",
+              "nullable": false,
+              "description": "Net pay amount",
+              "required": false
+            },
+            {
+              "name": "employee_ss_amount",
+              "type": "number",
+              "nullable": false,
+              "description": "Employee social security amount",
+              "required": false
+            },
+            {
+              "name": "employee_retention",
+              "type": "number",
+              "nullable": false,
+              "description": "Employee retention amount",
+              "required": false
+            },
+            {
+              "name": "company_ss_amount",
+              "type": "number",
+              "nullable": false,
+              "description": "Company social security amount",
+              "required": false
+            },
+            {
+              "name": "account_number_and_swift_bic",
+              "type": "string",
+              "nullable": false,
+              "description": "Bank account number and SWIFT/BIC code",
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "contact",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "numeration",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "accounting_subcategory",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "project",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "book_entry_draft",
+              "nullable": true,
+              "multiple": false
+            },
+            {
+              "name": "attachments",
+              "nullable": false,
+              "multiple": true
+            },
+            {
+              "name": "items",
+              "nullable": false,
+              "multiple": true
+            }
+          ],
+          "parameters": []
+        },
+        "delete": {
+          "operationId": "deletePaysheet",
+          "method": "DELETE",
+          "path": "/{owner_slug}/paysheets/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        }
+      }
+    },
+    "numbering_series": {
+      "name": "numbering_series",
+      "operations": {
+        "getAll": {
+          "operationId": "listNumberingSeries",
+          "method": "GET",
+          "path": "/{owner_slug}/numbering_series",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "page[number]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Page number (1-indexed)"
+            },
+            {
+              "name": "page[size]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Number of results per page"
+            },
+            {
+              "name": "filter[applicable_to]",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "invoices",
+                "tickets",
+                "additional_incomes",
+                "budgets",
+                "orders",
+                "delivery_notes"
+              ],
+              "required": false,
+              "description": "Filter by document type this series applies to. Simplified invoices use `tickets` series."
+            },
+            {
+              "name": "filter[amending]",
+              "type": "boolean",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by amending status"
+            },
+            {
+              "name": "filter[prefix]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by prefix"
+            },
+            {
+              "name": "filter[applies_to]",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "new",
+                "existing"
+              ],
+              "required": false,
+              "description": "Filter by applies_to value"
+            }
+          ]
+        },
+        "create": {
+          "operationId": "createNumberingSeries",
+          "method": "POST",
+          "path": "/{owner_slug}/numbering_series",
+          "description": "",
+          "attributes": [
+            {
+              "name": "prefix",
+              "type": "string",
+              "nullable": false,
+              "description": "Series prefix, unique per owner. Cannot be changed after creation.",
+              "required": true
+            },
+            {
+              "name": "applicable_to",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "invoices",
+                "tickets",
+                "additional_incomes",
+                "budgets",
+                "orders",
+                "delivery_notes"
+              ],
+              "description": "Restricts the series to a specific document type. Stored internally as `identifier` (singularized). Simplified invoices use `tickets` series.",
+              "required": false
+            },
+            {
+              "name": "default",
+              "type": "boolean",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "amending",
+              "type": "boolean",
+              "nullable": false,
+              "description": "Whether this series is used for amending (counter) documents.",
+              "required": false
+            },
+            {
+              "name": "applies_to",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "new",
+                "existing"
+              ],
+              "description": "Defaults to `new` when omitted. Forced to `existing` for `invoices` and `tickets` series on management-mode accounts. Any other value returns 400.",
+              "required": false
+            }
+          ],
+          "relationships": [],
+          "parameters": []
+        },
+        "get": {
+          "operationId": "getNumberingSeries",
+          "method": "GET",
+          "path": "/{owner_slug}/numbering_series/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "update": {
+          "operationId": "updateNumberingSeries",
+          "method": "PATCH",
+          "path": "/{owner_slug}/numbering_series/{id}",
+          "description": "Update an existing numbering series. Note: prefix cannot be changed after creation.",
+          "attributes": [
+            {
+              "name": "applicable_to",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "invoices",
+                "tickets",
+                "additional_incomes",
+                "budgets",
+                "orders",
+                "delivery_notes"
+              ],
+              "required": false
+            },
+            {
+              "name": "default",
+              "type": "boolean",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "amending",
+              "type": "boolean",
+              "nullable": false,
+              "description": "Whether this series is used for amending (counter) documents.",
+              "required": false
+            },
+            {
+              "name": "applies_to",
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "new",
+                "existing"
+              ],
+              "description": "Can be changed from `new` to `existing`, but not back: changing to `new` returns 403. Sending the current value is a no-op.",
+              "required": false
+            }
+          ],
+          "relationships": [],
+          "parameters": []
+        },
+        "delete": {
+          "operationId": "deleteNumberingSeries",
+          "method": "DELETE",
+          "path": "/{owner_slug}/numbering_series/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        }
+      }
+    },
+    "accounting_categories": {
+      "name": "accounting_categories",
+      "operations": {
+        "getAll": {
+          "operationId": "listAccountingCategories",
+          "method": "GET",
+          "path": "/{owner_slug}/accounting_categories",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "page[number]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Page number (1-indexed)"
+            },
+            {
+              "name": "page[size]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Number of results per page"
+            },
+            {
+              "name": "filter[id]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by ID (comma-separated for multiple)"
+            },
+            {
+              "name": "filter[kind]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by kind. Accepts a comma-separated list. Valid values:\n`expenses`, `income`, `assets`, `capital`, `creditor_debitor`, `financial`.\n"
+            },
+            {
+              "name": "filter[prefix]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by prefix (comma-separated for multiple)"
+            },
+            {
+              "name": "filter[active]",
+              "type": "boolean",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by active status (categories flagged active in the owner's preferences)."
+            }
+          ]
+        },
+        "get": {
+          "operationId": "getAccountingCategory",
+          "method": "GET",
+          "path": "/{owner_slug}/accounting_categories/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        }
+      }
+    },
+    "accounting_subcategories": {
+      "name": "accounting_subcategories",
+      "operations": {
+        "getAll": {
+          "operationId": "listAccountingSubcategories",
+          "method": "GET",
+          "path": "/{owner_slug}/accounting_subcategories",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": [
+            {
+              "name": "page[number]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Page number (1-indexed)"
+            },
+            {
+              "name": "page[size]",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "description": "Number of results per page"
+            },
+            {
+              "name": "filter[accounting_category_id]",
+              "type": "string",
+              "nullable": false,
+              "required": false,
+              "description": "Filter by accounting category ID (comma-separated for multiple)"
+            }
+          ]
+        },
+        "create": {
+          "operationId": "createAccountingSubcategory",
+          "method": "POST",
+          "path": "/{owner_slug}/accounting_subcategories",
+          "description": "",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "suffix",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            }
+          ],
+          "relationships": [
+            {
+              "name": "accounting_category",
+              "nullable": true,
+              "multiple": false
+            }
+          ],
+          "parameters": []
+        },
+        "get": {
+          "operationId": "getAccountingSubcategory",
+          "method": "GET",
+          "path": "/{owner_slug}/accounting_subcategories/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "update": {
+          "operationId": "updateAccountingSubcategory",
+          "method": "PATCH",
+          "path": "/{owner_slug}/accounting_subcategories/{id}",
+          "description": "",
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            },
+            {
+              "name": "suffix",
+              "type": "string",
+              "nullable": false,
+              "required": false
+            }
+          ],
+          "relationships": [],
+          "parameters": []
+        },
+        "delete": {
+          "operationId": "deleteAccountingSubcategory",
+          "method": "DELETE",
+          "path": "/{owner_slug}/accounting_subcategories/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        }
+      }
+    },
+    "attachments": {
+      "name": "attachments",
+      "operations": {
+        "upload": {
+          "operationId": "createAttachment",
+          "method": "POST",
+          "path": "/{owner_slug}/attachments",
+          "description": "Upload a file as a multipart form data request.",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "get": {
+          "operationId": "getAttachment",
+          "method": "GET",
+          "path": "/{owner_slug}/attachments/{id}",
+          "description": "Returns a file attached to any kind of book entry (invoices, simplified invoices, additional incomes, tickets or paysheets). The download URLs are pre-signed and expire 10 minutes after the response is generated; request the attachment again to get fresh ones.\n",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        },
+        "delete": {
+          "operationId": "deleteAttachment",
+          "method": "DELETE",
+          "path": "/{owner_slug}/attachments/{id}",
+          "description": "",
+          "attributes": [],
+          "relationships": [],
+          "parameters": []
+        }
+      }
+    }
+  },
+  "itemFields": [
+    {
+      "name": "concept",
+      "type": "string",
+      "nullable": false,
+      "required": false
+    },
+    {
+      "name": "unitary_amount",
+      "type": "string",
+      "nullable": false,
+      "required": false
+    },
+    {
+      "name": "quantity",
+      "type": "number",
+      "nullable": false,
+      "required": false
+    },
+    {
+      "name": "vat_percent",
+      "type": "number",
+      "nullable": false,
+      "required": false
+    },
+    {
+      "name": "retention_percent",
+      "type": "number",
+      "nullable": false,
+      "required": false
+    },
+    {
+      "name": "discount_percent",
+      "type": "number",
+      "nullable": false,
+      "required": false
+    },
+    {
+      "name": "kind",
+      "type": "string",
+      "nullable": false,
+      "required": false
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "nullable": false,
+      "required": false
+    }
+  ]
+}

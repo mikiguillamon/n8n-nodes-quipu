@@ -1,0 +1,55 @@
+{
+  "name": "Quipu \u2014 Download Invoice Pdf",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ceaf6c2d-48a1-495e-a7c8-b32bb63d30ba",
+      "name": "When clicking Execute workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "invoices",
+        "operation": "download",
+        "resourceId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "123"
+        },
+        "binaryProperty": "invoicePdf"
+      },
+      "id": "918b9071-9fde-472b-8218-0e57f0469bb2",
+      "name": "Quipu",
+      "type": "@mikiguillamon/n8n-nodes-quipu.quipu",
+      "typeVersion": 1,
+      "position": [
+        520,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking Execute workflow": {
+      "main": [
+        [
+          {
+            "node": "Quipu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

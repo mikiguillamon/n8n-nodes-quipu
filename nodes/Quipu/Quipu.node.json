@@ -1,0 +1,7 @@
+{
+ "node": "@mikiguillamon/n8n-nodes-quipu.quipu",
+ "nodeVersion": "1.0",
+ "codexVersion": "1.0",
+ "categories": ["Finance & Accounting"],
+ "resources": {"primaryDocumentation": [{"url": "https://quipuapp.github.io/api-v1-docs/"}]}
+}

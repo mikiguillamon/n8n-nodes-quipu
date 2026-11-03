@@ -1,0 +1,4105 @@
+openapi: 3.1.0
+info:
+  title: Quipu API v1
+  version: 1.0.0
+  description: |
+    REST API for Quipu invoicing and accounting software. JSON API format.
+    All requests require `Accept: application/vnd.quipu.v1+json` header,
+    except `POST /oauth/token`, which is a plain OAuth2 endpoint and
+    returns `application/json` (not JSON:API).
+
+    ## Authentication
+    All endpoints except `POST /oauth/token` require a valid OAuth2 Bearer
+    token passed via the `Authorization` header.
+
+    ### Obtaining an access token
+    Tokens are issued via the OAuth2 **Client Credentials Grant**:
+
+    ```
+    POST /oauth/token
+    Authorization: Basic <base64(client_id:client_secret)>
+    Content-Type: application/x-www-form-urlencoded
+
+    grant_type=client_credentials&scope=ecommerce
+    ```
+
+    - `client_id` / `client_secret`: your API credentials, sent via HTTP
+      Basic Auth in the `Authorization` header (NOT as body parameters).
+    - `grant_type` must be `client_credentials`.
+    - `scope` must always be `ecommerce`. This is REQUIRED on every token
+      request, even though you don't need to configure scopes manually
+      when setting up your application. Omitting it returns a
+      `400 invalid_scope` error.
+
+    The response includes an `access_token` valid for 2 hours
+    (`expires_in: 7200`). Use it as `Authorization: Bearer <access_token>`
+    on all other API calls. See the `POST /oauth/token` operation below for
+    the full request/response reference.
+
+    ## Rate Limiting
+    The API enforces a limit of **5 requests per 5 seconds**. Exceeding
+    this limit will result in `429 Too Many Requests` responses.
+
+    ## Format
+    Request and response bodies follow the [JSON API](https://jsonapi.org/)
+    specification.
+
+    ## Pagination
+    All list endpoints return paginated results. The response includes a
+    `meta.pagination_info` object with `total_pages`, `current_page`, and
+    `total_results`.
+  x-logo:
+    url: ./logo.png
+    altText: Quipu
+    href: https://getquipu.com
+  contact:
+    name: Quipu Integrations
+    url: https://getquipu.com/es/integraciones
+  termsOfService: https://getquipu.com/es/condiciones-de-uso
+servers:
+  - url: https://getquipu.com
+    description: Production
+security:
+  - bearerAuth: []
+tags:
+  - name: Authentication
+    description: Obtaining OAuth2 access tokens via the Client Credentials Grant.
+  - name: Users
+    description: User account information
+  - name: Contacts
+    description: |
+      Clients and suppliers.
+
+      `name` is required for every contact.
+
+      ## Country
+      When `country_code` is omitted on create (`POST /contacts` and `POST /contacts/bulk`), it is deduced:
+
+      - From the `tax_id` EU VAT prefix (e.g. `FR…` → `FR`, `EL…` → `GR`), or `ES` when the `tax_id` is a valid
+        Spanish NIF/CIF/NIE (with or without the `ES` prefix). Only when `document_type` is `NIF` or not set.
+      - Defaults to `ES` when no `tax_id` is sent, except for accounts under the OSS special regime.
+      - Otherwise the request is rejected with `country_code` "can't be blank".
+
+      A deduced `ES` country with an `ES`-prefixed Spanish `tax_id` (e.g. `ESB12345674`) is stored without the
+      prefix (`B12345674`). A `country_code` sent explicitly is never changed.
+
+      ## Tax ID rules (all accounts)
+      `tax_id` is normalized before validation: spaces and punctuation are removed and it is uppercased
+      (e.g. `b-12345674` is stored as `B12345674`).
+
+      When the contact has both `tax_id` and `document_type` (the stored values are validated, so a PATCH that only
+      changes `country_code` can also fail):
+
+      - Spanish contacts (`country_code: ES` sent explicitly) cannot use a `tax_id` starting with `ES`.
+      - `none` (not registered) requires `country_code: ES` and a valid Spanish NIF/CIF/NIE.
+
+      ## Verifactu accounts
+      On accounts with Verifactu activated, these extra rules apply:
+
+      - `document_type` must be valid for the contact's `country_code`:
+        - `ES`: `NIF`, `passport`, `none`
+        - Other EU countries: `NIF`, `passport`, `official_id_from_residence_country`, `residence_permit`, `other`
+        - Non-EU countries: `passport`, `official_id_from_residence_country`, `residence_permit`, `other`
+      - When `document_type` is set, `tax_id` is validated against it:
+        - Spanish contacts with `NIF` or `none`: a valid Spanish NIF/CIF/NIE of at most 9 characters.
+        - Other EU contacts with `NIF`: must start with the country's VAT prefix (e.g. `FR…`, `EL…` for Greece).
+        - Any other case: at most 20 characters, and a non-Spanish `tax_id` cannot contain only letters.
+      - `tax_id` cannot be the account's own tax ID.
+      - When an income document with this contact is finalized, `name` must be at most 120 characters (letters, digits,
+        punctuation and spaces only), and:
+        - Invoices: the contact must have `tax_id` and `document_type`.
+        - Simplified invoices: the contact must either have `tax_id` and `document_type`, or have none of `tax_id`,
+          `zip_code` and `document_type` (an anonymous recipient). Partial data is rejected.
+  - name: Book Entries
+    description: 'Read-only listing of all book entries. The type filter accepts: invoices, paysheets, tickets, additional_incomes.'
+  - name: Invoices
+    description: Full invoices (income and expenses)
+  - name: Simplified Invoices
+    description: Simplified invoices
+  - name: Additional Incomes
+    description: Additional income entries (simplified income documents). Always outbound (income). These entries are not subject to Verifactu.
+  - name: Paysheets
+    description: 'Employee paysheets. Note: For paysheets, issuing_* fields refer to the company (target) and recipient_* fields refer to the employee (origin), which is reversed from other book entry types.'
+  - name: Numbering Series
+    description: Invoice numbering series configuration
+  - name: Accounting Categories
+    description: Read-only accounting categories
+  - name: Accounting Subcategories
+    description: Accounting subcategories
+  - name: Attachments
+    description: File attachments for book entries
+paths:
+  /oauth/token:
+    post:
+      operationId: createAccessToken
+      summary: Generate access token
+      description: |
+        Exchanges API credentials for a Bearer access token using the
+        OAuth2 Client Credentials Grant. Use the resulting `access_token`
+        as `Authorization: Bearer <access_token>` on all other requests.
+      tags:
+        - Authentication
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - grant_type
+                - scope
+              properties:
+                grant_type:
+                  type: string
+                  const: client_credentials
+                  description: Must be `client_credentials` (REQUIRED).
+                scope:
+                  type: string
+                  const: ecommerce
+                  description: |
+                    Must always be `ecommerce` (REQUIRED on every token request), even though scopes do not need to be configured manually in your app settings. Omitting it returns `400 invalid_scope`.
+            example:
+              grant_type: client_credentials
+              scope: ecommerce
+      responses:
+        '200':
+          description: Access token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    const: Bearer
+                  expires_in:
+                    type: integer
+                    example: 7200
+                    description: Token lifetime in seconds.
+                  scope:
+                    type: string
+                    example: ecommerce
+                  created_at:
+                    type: integer
+                    description: Unix timestamp of issuance.
+              example:
+                access_token: abc123...
+                token_type: Bearer
+                expires_in: 7200
+                scope: ecommerce
+                created_at: 1719999999
+        '400':
+          description: |
+            Invalid or missing scope/grant_type. Note: the response body's `status_code` field is always `401` regardless of this actual HTTP status code (see `OAuthErrorResponse`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthErrorResponse'
+              example:
+                error: invalid_scope
+                error_description: The requested scope is invalid, unknown, or malformed.
+                status_code: 401
+        '401':
+          description: Missing or invalid client credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthErrorResponse'
+              example:
+                error: invalid_client
+                error_description: Client authentication failed.
+                status_code: 401
+  /users/{id}:
+    get:
+      operationId: getUser
+      summary: Show user
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/AcceptHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: User ID
+      responses:
+        '200':
+          description: User found
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserResource'
+              example:
+                data:
+                  id: '42'
+                  type: users
+                  attributes:
+                    email: user@example.com
+                    name: Jane
+                    surnames: Doe
+                    locale: es
+                    sign_up_draft_data: null
+                    is_full_admin: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/contacts:
+    get:
+      operationId: listContacts
+      summary: List contacts
+      tags:
+        - Contacts
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: filter[kind]
+          in: query
+          schema:
+            type: string
+            enum:
+              - client
+              - supplier
+              - employee
+          description: Filter by contact kind
+        - name: filter[tax_id]
+          in: query
+          schema:
+            type: string
+          description: Filter by tax ID
+        - name: filter[country]
+          in: query
+          schema:
+            type: string
+          description: Filter by country code (comma-separated for multiple)
+        - name: filter[email]
+          in: query
+          schema:
+            type: string
+          description: Filter by email address
+        - name: filter[q]
+          in: query
+          schema:
+            type: string
+          description: Free-text search across contact fields
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum:
+              - name
+              - '-name'
+              - total_paid_income
+              - '-total_paid_income'
+              - total_unpaid_income
+              - '-total_unpaid_income'
+              - total_paid_expenses
+              - '-total_paid_expenses'
+              - total_unpaid_expenses
+              - '-total_unpaid_expenses'
+          description: Sort field (prefix with `-` for descending)
+      responses:
+        '200':
+          description: Paginated list of contacts
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ContactResource'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createContact
+      summary: Create contact
+      tags:
+        - Contacts
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/ContactCreateWritable'
+            example:
+              data:
+                type: contacts
+                attributes:
+                  name: Acme Corp
+                  tax_id: B12345674
+                  document_type: NIF
+                  phone: +34 912 345 678
+                  email: billing@acme.com
+                  address: Calle Mayor 1
+                  town: Madrid
+                  zip_code: '28013'
+                  country_code: ES
+                  client_number: '124'
+                  is_supplier_of_direct_goods: false
+                  bank_account_number: ES9121000418450200051332
+                  bank_account_swift_bic: CAIXESBBXXX
+      responses:
+        '201':
+          description: Contact created
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ContactResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/contacts/{id}:
+    get:
+      operationId: getContact
+      summary: Show contact
+      tags:
+        - Contacts
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Contact found
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ContactResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateContact
+      summary: Update contact
+      tags:
+        - Contacts
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/ContactWritable'
+      responses:
+        '200':
+          description: Contact updated
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ContactResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    delete:
+      operationId: deleteContact
+      summary: Delete contact
+      tags:
+        - Contacts
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Contact deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/book_entries:
+    get:
+      operationId: listBookEntries
+      summary: List all book entries
+      description: |
+        Returns a paginated list of all book entries including invoices,
+        tickets, simplified invoices, additional income, and paysheets.
+      tags:
+        - Book Entries
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IncludeBookEntry'
+        - name: with_detailed_amounts
+          in: query
+          schema:
+            type: boolean
+          description: |
+            Include the `detailed_amounts` breakdown object in each entry. Presence of the parameter is enough — any value (including empty) enables it.
+        - name: filter[type]
+          in: query
+          schema:
+            type: string
+            enum:
+              - invoices
+              - tickets
+              - paysheets
+              - additional_incomes
+          description: Filter by entry type
+        - name: filter[kind]
+          in: query
+          schema:
+            type: string
+            enum:
+              - expenses
+              - income
+          description: Filter by kind (expenses or income)
+        - name: filter[q]
+          in: query
+          schema:
+            type: string
+          description: Free-text search
+        - name: filter[period]
+          in: query
+          schema:
+            type: string
+          description: Filter by period (e.g. "2024Q1", "2024-01")
+        - $ref: '#/components/parameters/FilterOperationDate'
+        - $ref: '#/components/parameters/FilterOperationDateFrom'
+        - $ref: '#/components/parameters/FilterOperationDateTo'
+        - name: filter[payment_status]
+          in: query
+          schema:
+            type: string
+            enum:
+              - paid
+              - unpaid
+              - due
+              - pending
+          description: 'Filter by payment status. Note: `unpaid` includes both `pending` and overdue entries.'
+        - name: filter[contact_id]
+          in: query
+          schema:
+            type: integer
+          description: Filter by contact ID
+        - name: filter[validation_status]
+          in: query
+          schema:
+            type: string
+          description: Filter by validation status
+        - name: filter[field_query][field]
+          in: query
+          schema:
+            type: string
+          description: Field name for field-level query filter
+        - name: filter[field_query][term]
+          in: query
+          schema:
+            type: string
+          description: Search term for field-level query filter
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum:
+              - number
+              - '-number'
+              - issue_date
+              - '-issue_date'
+              - counterpart_name
+              - '-counterpart_name'
+              - total_amount
+              - '-total_amount'
+              - total_amount_without_taxes
+              - '-total_amount_without_taxes'
+          description: Sort field (prefix with `-` for descending)
+      responses:
+        '200':
+          description: Paginated list of book entries
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BookEntryResource'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+                  included:
+                    type: array
+                    description: |
+                      Populated when `?include=` is used. Contains sideloaded resources shared across the whole collection (deduplicated) — e.g. `?include=items,accounting_category,accounting_subcategory` returns each book entry's own accounting category/subcategory plus each item's own, whenever it differs from the book entry's default.
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/ItemResource'
+                        - $ref: '#/components/schemas/ContactResource'
+                        - $ref: '#/components/schemas/AccountingCategoryResource'
+                        - $ref: '#/components/schemas/AccountingSubcategoryResource'
+                        - $ref: '#/components/schemas/InvoiceResource'
+                        - $ref: '#/components/schemas/TicketResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/invoices:
+    get:
+      operationId: listInvoices
+      summary: List invoices
+      tags:
+        - Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IncludeInvoice'
+        - name: filter[kind]
+          in: query
+          schema:
+            type: string
+            enum:
+              - expenses
+              - income
+          description: Filter by kind (expenses or income)
+        - name: filter[q]
+          in: query
+          schema:
+            type: string
+          description: Free-text search
+        - name: filter[period]
+          in: query
+          schema:
+            type: string
+          description: Filter by period (e.g. "2024Q1", "2024-01")
+        - $ref: '#/components/parameters/FilterOperationDate'
+        - $ref: '#/components/parameters/FilterOperationDateFrom'
+        - $ref: '#/components/parameters/FilterOperationDateTo'
+        - name: filter[payment_status]
+          in: query
+          schema:
+            type: string
+            enum:
+              - paid
+              - unpaid
+              - due
+              - pending
+          description: 'Filter by payment status. Note: `unpaid` includes both `pending` and overdue entries.'
+        - name: filter[validation_status]
+          in: query
+          schema:
+            type: string
+          description: Filter by validation status
+        - name: filter[contact_id]
+          in: query
+          schema:
+            type: integer
+          description: Filter by contact ID
+        - name: filter[field_query][field]
+          in: query
+          schema:
+            type: string
+          description: Field name for field-level query filter
+        - name: filter[field_query][term]
+          in: query
+          schema:
+            type: string
+          description: Search term for field-level query filter
+      responses:
+        '200':
+          description: Paginated list of invoices
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InvoiceResource'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+                  included:
+                    type: array
+                    description: Populated when `?include=` is used. Contains sideloaded resources.
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/ItemResource'
+                        - $ref: '#/components/schemas/ContactResource'
+                        - $ref: '#/components/schemas/AccountingCategoryResource'
+                        - $ref: '#/components/schemas/AccountingSubcategoryResource'
+                        - $ref: '#/components/schemas/InvoiceResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createInvoice
+      summary: Create invoice
+      tags:
+        - Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/InvoiceCreateWritable'
+            example:
+              data:
+                type: invoices
+                attributes:
+                  kind: income
+                  issue_date: '2024-03-15'
+                  operation_date: '2024-03-10'
+                  paid_at: '2024-03-20'
+                  payment_method: bank_transfer
+                  tags: consulting
+                  notes: March consulting services
+                relationships:
+                  contact:
+                    data:
+                      id: '101'
+                      type: contacts
+                  numeration:
+                    data:
+                      id: '5'
+                      type: numbering_series
+                  items:
+                    data:
+                      - type: book_entry_items
+                        attributes:
+                          concept: Consulting services
+                          unitary_amount: '1500.00'
+                          quantity: 1
+                          vat_percent: 21
+                          retention_percent: 15
+      responses:
+        '201':
+          description: Invoice created
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/InvoiceResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/invoices/{id}:
+    get:
+      operationId: getInvoice
+      summary: Show invoice
+      tags:
+        - Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+        - $ref: '#/components/parameters/IncludeInvoice'
+      responses:
+        '200':
+          description: Invoice found
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/InvoiceResource'
+                  included:
+                    type: array
+                    description: Populated when `?include=` is used. Contains sideloaded resources.
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/ItemResource'
+                        - $ref: '#/components/schemas/ContactResource'
+                        - $ref: '#/components/schemas/AccountingCategoryResource'
+                        - $ref: '#/components/schemas/AccountingSubcategoryResource'
+                        - $ref: '#/components/schemas/InvoiceResource'
+              examples:
+                bare:
+                  summary: Without sideloading
+                  value:
+                    data:
+                      id: '42'
+                      type: invoices
+                      attributes:
+                        number: F-2024-001
+                        issue_date: '2024-03-15'
+                        operation_date: '2024-03-10'
+                        total_amount: '1815.00'
+                        tags: ''
+                      relationships:
+                        contact:
+                          data:
+                            id: '101'
+                            type: contacts
+                        items:
+                          data:
+                            - id: '501'
+                              type: book_entry_items
+                withItems:
+                  summary: With ?include=items
+                  value:
+                    data:
+                      id: '42'
+                      type: invoices
+                      attributes:
+                        number: F-2024-001
+                        issue_date: '2024-03-15'
+                        total_amount: '1815.00'
+                      relationships:
+                        items:
+                          data:
+                            - id: '501'
+                              type: book_entry_items
+                    included:
+                      - id: '501'
+                        type: book_entry_items
+                        attributes:
+                          concept: Consulting services
+                          unitary_amount: '1500.00'
+                          quantity: '1.0'
+                          vat_percent: '21.0'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateInvoice
+      summary: Update invoice
+      description: |
+        Partial update: every attribute is optional, and attributes and relationships that are not sent are left unchanged. `kind` cannot be changed. Some relationships replace existing data when sent: `items` replaces the whole item list (see the item `id`), `attachments` replaces all attachments, and `accounting_category` resets `accounting_subcategory` unless `accounting_subcategory` is sent in the same request. Blocked documents only accept the `payment_method`, `notes` and `tags` attributes. Once an income document is finalized (`stage` `final` or later), `issue_date`, `items` and `contact` are silently ignored (the response is still 200), and once it has been sent to AEAT, `numeration` and `operation_date` are ignored too.
+      tags:
+        - Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/InvoiceWritable'
+      responses:
+        '200':
+          description: Invoice updated
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/InvoiceResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    delete:
+      operationId: deleteInvoice
+      summary: Delete invoice
+      tags:
+        - Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Invoice deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/invoices/{id}/download:
+    get:
+      operationId: downloadInvoicePdf
+      summary: Download invoice PDF
+      description: Returns the (outbound) invoice rendered as a PDF file.
+      tags:
+        - Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/invoices/{id}/ephemeral_open_download:
+    get:
+      operationId: ephemeralOpenDownloadInvoicePdf
+      summary: Download invoice PDF via ephemeral open token
+      description: |
+        Returns the invoice rendered as a PDF file using a short-lived, token-authenticated link instead of a Bearer token (see `ephemeral_open_download_pdf_url` on the invoice resource). Does not require authentication.
+      tags:
+        - Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/ResourceId'
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Ephemeral open-download token issued alongside the document.
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Document not found, or the token is missing, invalid, or expired
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/simplified_invoices:
+    get:
+      operationId: listSimplifiedInvoices
+      summary: List simplified invoices
+      tags:
+        - Simplified Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IncludeSimplifiedInvoice'
+        - name: filter[kind]
+          in: query
+          schema:
+            type: string
+            enum:
+              - expenses
+              - income
+          description: Filter by kind (expenses or income)
+        - $ref: '#/components/parameters/FilterOperationDate'
+        - $ref: '#/components/parameters/FilterOperationDateFrom'
+        - $ref: '#/components/parameters/FilterOperationDateTo'
+      responses:
+        '200':
+          description: Paginated list of simplified invoices
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SimplifiedInvoiceResource'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+                  included:
+                    type: array
+                    description: Populated when `?include=` is used. Contains sideloaded resources.
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/ItemResource'
+                        - $ref: '#/components/schemas/AccountingCategoryResource'
+                        - $ref: '#/components/schemas/AccountingSubcategoryResource'
+                        - $ref: '#/components/schemas/TicketResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createSimplifiedInvoice
+      summary: Create simplified invoice
+      tags:
+        - Simplified Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/SimplifiedInvoiceCreateWritable'
+      responses:
+        '201':
+          description: Simplified invoice created
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SimplifiedInvoiceResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/simplified_invoices/{id}:
+    get:
+      operationId: getSimplifiedInvoice
+      summary: Show simplified invoice
+      tags:
+        - Simplified Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+        - $ref: '#/components/parameters/IncludeSimplifiedInvoice'
+      responses:
+        '200':
+          description: Simplified invoice found
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SimplifiedInvoiceResource'
+                  included:
+                    type: array
+                    description: Populated when `?include=` is used. Contains sideloaded resources.
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/ItemResource'
+                        - $ref: '#/components/schemas/AccountingCategoryResource'
+                        - $ref: '#/components/schemas/AccountingSubcategoryResource'
+                        - $ref: '#/components/schemas/TicketResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateSimplifiedInvoice
+      summary: Update simplified invoice
+      description: |
+        Partial update: every attribute is optional, and attributes and relationships that are not sent are left unchanged. `kind` cannot be changed. Some relationships replace existing data when sent: `items` replaces the whole item list (see the item `id`), `attachments` replaces all attachments, and `accounting_category` resets `accounting_subcategory` unless `accounting_subcategory` is sent in the same request. Blocked documents only accept the `payment_method`, `notes` and `tags` attributes. Once an income document is finalized (`stage` `final` or later), `issue_date`, `items` and `contact` are silently ignored (the response is still 200), and once it has been sent to AEAT, `numeration` and `operation_date` are ignored too.
+      tags:
+        - Simplified Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/SimplifiedInvoiceWritable'
+      responses:
+        '200':
+          description: Simplified invoice updated
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SimplifiedInvoiceResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    delete:
+      operationId: deleteSimplifiedInvoice
+      summary: Delete simplified invoice
+      tags:
+        - Simplified Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Simplified invoice deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/simplified_invoices/{id}/download:
+    get:
+      operationId: downloadSimplifiedInvoicePdf
+      summary: Download simplified invoice PDF
+      description: Returns the simplified invoice rendered as a PDF file.
+      tags:
+        - Simplified Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/simplified_invoices/{id}/ephemeral_open_download:
+    get:
+      operationId: ephemeralOpenDownloadSimplifiedInvoicePdf
+      summary: Download simplified invoice PDF via ephemeral open token
+      description: |
+        Returns the simplified invoice rendered as a PDF file using a short-lived, token-authenticated link instead of a Bearer token (see `ephemeral_open_download_pdf_url` on the simplified invoice resource). Does not require authentication.
+      tags:
+        - Simplified Invoices
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/ResourceId'
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Ephemeral open-download token issued alongside the document.
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Document not found, or the token is missing, invalid, or expired
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/additional_incomes:
+    get:
+      operationId: listAdditionalIncomes
+      summary: List additional income
+      tags:
+        - Additional Incomes
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IncludeAdditionalIncome'
+      responses:
+        '200':
+          description: Paginated list of additional income
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdditionalIncomeResource'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+                  included:
+                    type: array
+                    description: Populated when `?include=` is used. Contains sideloaded resources.
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/ItemResource'
+                        - $ref: '#/components/schemas/AccountingCategoryResource'
+                        - $ref: '#/components/schemas/AccountingSubcategoryResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createAdditionalIncome
+      summary: Create additional income
+      tags:
+        - Additional Incomes
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/AdditionalIncomeCreateWritable'
+      responses:
+        '201':
+          description: Additional income created
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AdditionalIncomeResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/additional_incomes/{id}:
+    get:
+      operationId: getAdditionalIncome
+      summary: Show additional income
+      tags:
+        - Additional Incomes
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+        - $ref: '#/components/parameters/IncludeAdditionalIncome'
+      responses:
+        '200':
+          description: Additional income found
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AdditionalIncomeResource'
+                  included:
+                    type: array
+                    description: Populated when `?include=` is used. Contains sideloaded resources.
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/ItemResource'
+                        - $ref: '#/components/schemas/AccountingCategoryResource'
+                        - $ref: '#/components/schemas/AccountingSubcategoryResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateAdditionalIncome
+      summary: Update additional income
+      description: |
+        Partial update: every attribute is optional, and attributes and relationships that are not sent are left unchanged. `kind` cannot be changed. Some relationships replace existing data when sent: `items` replaces the whole item list (see the item `id`), `attachments` replaces all attachments, and `accounting_category` resets `accounting_subcategory` unless `accounting_subcategory` is sent in the same request. Blocked documents only accept the `payment_method`, `notes` and `tags` attributes.
+      tags:
+        - Additional Incomes
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/AdditionalIncomeWritable'
+      responses:
+        '200':
+          description: Additional income updated
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AdditionalIncomeResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    delete:
+      operationId: deleteAdditionalIncome
+      summary: Delete additional income
+      tags:
+        - Additional Incomes
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Additional income deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/additional_incomes/{id}/download:
+    get:
+      operationId: downloadAdditionalIncomePdf
+      summary: Download additional income PDF
+      description: |
+        Additional incomes never generate or expose a PDF, so this always returns `404`. The route exists for parity with the other book entry types.
+      tags:
+        - Additional Incomes
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/additional_incomes/{id}/ephemeral_open_download:
+    get:
+      operationId: ephemeralOpenDownloadAdditionalIncomePdf
+      summary: Download additional income PDF via ephemeral open token
+      description: |
+        Additional incomes never generate or expose a PDF, so this always returns `404`. The route exists for parity with the other book entry types.
+      tags:
+        - Additional Incomes
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/ResourceId'
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Ephemeral open-download token issued alongside the document.
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Always returned — additional incomes never generate a PDF
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/paysheets:
+    get:
+      operationId: listPaysheets
+      summary: List paysheets
+      tags:
+        - Paysheets
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/IncludePaysheet'
+      responses:
+        '200':
+          description: Paginated list of paysheets
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaysheetResource'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+                  included:
+                    type: array
+                    description: Populated when `?include=` is used. Contains sideloaded resources.
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/ContactResource'
+                        - $ref: '#/components/schemas/AccountingCategoryResource'
+                        - $ref: '#/components/schemas/AccountingSubcategoryResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createPaysheet
+      summary: Create paysheet
+      tags:
+        - Paysheets
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/PaysheetCreateWritable'
+            example:
+              data:
+                type: paysheets
+                attributes:
+                  kind: expenses
+                  issue_date: '2024-03-31'
+                  net_pay: '1800.00'
+                  employee_ss_amount: '150.00'
+                  employee_retention: '360.00'
+                  company_ss_amount: '720.00'
+                relationships:
+                  contact:
+                    data:
+                      id: '55'
+                      type: contacts
+      responses:
+        '201':
+          description: Paysheet created
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PaysheetResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/paysheets/{id}:
+    get:
+      operationId: getPaysheet
+      summary: Show paysheet
+      tags:
+        - Paysheets
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+        - $ref: '#/components/parameters/IncludePaysheet'
+      responses:
+        '200':
+          description: Paysheet found
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PaysheetResource'
+                  included:
+                    type: array
+                    description: Populated when `?include=` is used. Contains sideloaded resources.
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/ContactResource'
+                        - $ref: '#/components/schemas/AccountingCategoryResource'
+                        - $ref: '#/components/schemas/AccountingSubcategoryResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updatePaysheet
+      summary: Update paysheet
+      description: |
+        Partial update: every attribute is optional, and attributes and relationships that are not sent are left unchanged. Some relationships replace existing data when sent: `items` replaces the whole item list (see the item `id`) and `attachments` replaces all attachments. Blocked paysheets only accept the `payment_method` and `tags` attributes (plus `notes`, which is not accepted on paysheets otherwise).
+      tags:
+        - Paysheets
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/PaysheetWritable'
+      responses:
+        '200':
+          description: Paysheet updated
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PaysheetResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    delete:
+      operationId: deletePaysheet
+      summary: Delete paysheet
+      tags:
+        - Paysheets
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Paysheet deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/numbering_series:
+    get:
+      operationId: listNumberingSeries
+      summary: List numbering series
+      tags:
+        - Numbering Series
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: filter[applicable_to]
+          in: query
+          schema:
+            type: string
+            enum:
+              - invoices
+              - tickets
+              - additional_incomes
+              - budgets
+              - orders
+              - delivery_notes
+          description: Filter by document type this series applies to. Simplified invoices use `tickets` series.
+        - name: filter[amending]
+          in: query
+          schema:
+            type: boolean
+          description: Filter by amending status
+        - name: filter[prefix]
+          in: query
+          schema:
+            type: string
+          description: Filter by prefix
+        - name: filter[applies_to]
+          in: query
+          schema:
+            type: string
+            enum:
+              - new
+              - existing
+          description: Filter by applies_to value
+      responses:
+        '200':
+          description: Paginated list of numbering series
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NumberingSeriesResource'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createNumberingSeries
+      summary: Create numbering series
+      tags:
+        - Numbering Series
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/NumberingSeriesCreateWritable'
+            example:
+              data:
+                type: numbering_series
+                attributes:
+                  prefix: INV-
+                  applicable_to: invoices
+                  default: false
+                  amending: false
+                  applies_to: new
+      responses:
+        '201':
+          description: Numbering series created
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/NumberingSeriesResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/numbering_series/{id}:
+    get:
+      operationId: getNumberingSeries
+      summary: Show numbering series
+      tags:
+        - Numbering Series
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Numbering series found
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/NumberingSeriesResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateNumberingSeries
+      summary: Update numbering series
+      description: 'Update an existing numbering series. Note: prefix cannot be changed after creation.'
+      tags:
+        - Numbering Series
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/NumberingSeriesUpdateWritable'
+      responses:
+        '200':
+          description: Numbering series updated
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/NumberingSeriesResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    delete:
+      operationId: deleteNumberingSeries
+      summary: Delete numbering series
+      tags:
+        - Numbering Series
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Numbering series deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/accounting_categories:
+    get:
+      operationId: listAccountingCategories
+      summary: List accounting categories
+      tags:
+        - Accounting Categories
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: filter[id]
+          in: query
+          schema:
+            type: string
+          description: Filter by ID (comma-separated for multiple)
+        - name: filter[kind]
+          in: query
+          schema:
+            type: string
+          description: |
+            Filter by kind. Accepts a comma-separated list. Valid values:
+            `expenses`, `income`, `assets`, `capital`, `creditor_debitor`, `financial`.
+        - name: filter[prefix]
+          in: query
+          schema:
+            type: string
+          description: Filter by prefix (comma-separated for multiple)
+        - name: filter[active]
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status (categories flagged active in the owner's preferences).
+      responses:
+        '200':
+          description: Paginated list of accounting categories
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccountingCategoryResource'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/accounting_categories/{id}:
+    get:
+      operationId: getAccountingCategory
+      summary: Show accounting category
+      tags:
+        - Accounting Categories
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Accounting category found
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AccountingCategoryResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/accounting_subcategories:
+    get:
+      operationId: listAccountingSubcategories
+      summary: List accounting subcategories
+      tags:
+        - Accounting Subcategories
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: filter[accounting_category_id]
+          in: query
+          schema:
+            type: string
+          description: Filter by accounting category ID (comma-separated for multiple)
+      responses:
+        '200':
+          description: Paginated list of accounting subcategories
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccountingSubcategoryResource'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createAccountingSubcategory
+      summary: Create accounting subcategory
+      tags:
+        - Accounting Subcategories
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/AccountingSubcategoryWritable'
+            example:
+              data:
+                type: accounting_subcategories
+                attributes:
+                  name: Office Supplies
+                  suffix: '01'
+                relationships:
+                  accounting_category:
+                    data:
+                      id: '3'
+                      type: accounting_categories
+      responses:
+        '201':
+          description: Accounting subcategory created
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AccountingSubcategoryResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/accounting_subcategories/{id}:
+    get:
+      operationId: getAccountingSubcategory
+      summary: Show accounting subcategory
+      tags:
+        - Accounting Subcategories
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Accounting subcategory found
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AccountingSubcategoryResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateAccountingSubcategory
+      summary: Update accounting subcategory
+      tags:
+        - Accounting Subcategories
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ContentTypeHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/vnd.quipu.v1+json:
+            schema:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/AccountingSubcategoryUpdateWritable'
+      responses:
+        '200':
+          description: Accounting subcategory updated
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AccountingSubcategoryResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    delete:
+      operationId: deleteAccountingSubcategory
+      summary: Delete accounting subcategory
+      tags:
+        - Accounting Subcategories
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Accounting subcategory deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/attachments:
+    post:
+      operationId: createAttachment
+      summary: Create attachment (file upload)
+      description: Upload a file as a multipart form data request.
+      tags:
+        - Attachments
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - book_entry_id
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload
+                book_entry_id:
+                  type: string
+                  description: ID of the book entry to attach the file to (required)
+      responses:
+        '201':
+          description: Attachment created
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AttachmentResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /{owner_slug}/attachments/{id}:
+    get:
+      operationId: getAttachment
+      summary: Show attachment
+      description: |
+        Returns a file attached to any kind of book entry (invoices, simplified invoices, additional incomes, tickets or paysheets). The download URLs are pre-signed and expire 10 minutes after the response is generated; request the attachment again to get fresh ones.
+      tags:
+        - Attachments
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Attachment found
+          content:
+            application/vnd.quipu.v1+json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AttachmentResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    delete:
+      operationId: deleteAttachment
+      summary: Delete attachment
+      tags:
+        - Attachments
+      parameters:
+        - $ref: '#/components/parameters/OwnerSlug'
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Attachment deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: OAuth2
+      description: |
+        OAuth2 Bearer token. Obtain it via `POST /oauth/token` (see the Authentication tag / `## Authentication` section above).
+    basicAuth:
+      type: http
+      scheme: basic
+      description: |
+        HTTP Basic Auth with your API `client_id`/`client_secret`. Used only to request an access token via `POST /oauth/token`.
+  parameters:
+    OwnerSlug:
+      name: owner_slug
+      in: path
+      required: true
+      schema:
+        type: string
+      description: URL slug of the account/business owner
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Resource ID
+    AcceptHeader:
+      name: Accept
+      in: header
+      required: true
+      schema:
+        type: string
+        const: application/vnd.quipu.v1+json
+      description: Required API version accept header
+    ContentTypeHeader:
+      name: Content-Type
+      in: header
+      required: true
+      schema:
+        type: string
+        const: application/vnd.quipu.v1+json
+      description: Required content type for write operations
+    PageNumber:
+      name: page[number]
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number (1-indexed)
+    PageSize:
+      name: page[size]
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+      description: Number of results per page
+    FilterOperationDate:
+      name: filter[operation_date]
+      in: query
+      schema:
+        type: string
+      description: |
+        Filter income documents by `operation_date`. Accepts a whole year (`2024` or, equivalently, `2024-all`), a quarter (`2024-Q1`), a month (`2024-3`, without a leading zero) or `all` (any date, i.e. no restriction). For an explicit range, send `filter[operation_date][from]` and `filter[operation_date][to]` instead. Documents without an operation date are matched by their `issue_date`, and drafts that have no `issue_date` yet are always included, as are additional incomes (operation date does not apply to them). Only applied together with `filter[kind]=income`; ignored otherwise.
+    FilterOperationDateFrom:
+      name: filter[operation_date][from]
+      in: query
+      schema:
+        type: string
+        format: date
+      description: |
+        Start of an explicit `operation_date` range (inclusive). Must be sent together with `filter[operation_date][to]`; follows the same rules as `filter[operation_date]`.
+    FilterOperationDateTo:
+      name: filter[operation_date][to]
+      in: query
+      schema:
+        type: string
+        format: date
+      description: |
+        End of an explicit `operation_date` range (inclusive). Must be sent together with `filter[operation_date][from]`; follows the same rules as `filter[operation_date]`.
+    IncludeBookEntry:
+      name: include
+      in: query
+      schema:
+        type: string
+      description: |
+        Comma-separated list of related resources to embed in the `included`
+        array (JSON:API sideloading). Allowed values: `items`, `contact`,
+        `accounting_category`, `accounting_subcategory`, `items.accounting_category`,
+        `items.accounting_subcategory`.
+        Example: `?include=items,contact`.
+
+        When both `items` and `accounting_category`/`accounting_subcategory`
+        are requested together, each item's own accounting category/subcategory
+        is also embedded in `included` whenever it differs from the book
+        entry's own default — no separate include value needed. The explicit
+        nested form (`?include=items.accounting_category`, `?include=items.accounting_subcategory`)
+        is also accepted for clients that prefer to request it directly.
+    IncludeInvoice:
+      name: include
+      in: query
+      schema:
+        type: string
+      description: |
+        Comma-separated list of related resources to embed in the `included`
+        array (JSON:API sideloading). Allowed values: `items`, `contact`,
+        `accounting_category`, `accounting_subcategory`, `items.accounting_category`,
+        `items.accounting_subcategory`.
+        Example: `?include=items,contact`.
+
+        When both `items` and `accounting_category`/`accounting_subcategory`
+        are requested together, each item's own accounting category/subcategory
+        is also embedded in `included` whenever it differs from the invoice's
+        own default — no separate include value needed. The explicit nested
+        form (`?include=items.accounting_category`, `?include=items.accounting_subcategory`) is
+        also accepted for clients that prefer to request it directly.
+    IncludeSimplifiedInvoice:
+      name: include
+      in: query
+      schema:
+        type: string
+      description: |
+        Comma-separated list of related resources to embed in the `included`
+        array. Allowed values: `items`, `accounting_category`,
+        `accounting_subcategory`, `items.accounting_category`,
+        `items.accounting_subcategory`. Example: `?include=items`.
+
+        When both `items` and `accounting_category`/`accounting_subcategory`
+        are requested together, each item's own accounting category/subcategory
+        is also embedded in `included` whenever it differs from the document's
+        own default — no separate include value needed. The explicit nested
+        form (`?include=items.accounting_category`, `?include=items.accounting_subcategory`) is
+        also accepted for clients that prefer to request it directly.
+    IncludeAdditionalIncome:
+      name: include
+      in: query
+      schema:
+        type: string
+      description: |
+        Comma-separated list of related resources to embed in the `included`
+        array. Allowed values: `items`, `accounting_category`,
+        `accounting_subcategory`, `items.accounting_category`,
+        `items.accounting_subcategory`. Example: `?include=items`.
+
+        When both `items` and `accounting_category`/`accounting_subcategory`
+        are requested together, each item's own accounting category/subcategory
+        is also embedded in `included` whenever it differs from the document's
+        own default — no separate include value needed. The explicit nested
+        form (`?include=items.accounting_category`, `?include=items.accounting_subcategory`) is
+        also accepted for clients that prefer to request it directly.
+    IncludePaysheet:
+      name: include
+      in: query
+      schema:
+        type: string
+      description: |
+        Comma-separated list of related resources to embed in the `included`
+        array. Allowed values: `contact`, `accounting_category`,
+        `accounting_subcategory`.
+        Example: `?include=contact,accounting_subcategory`.
+  schemas:
+    PaginationMeta:
+      type: object
+      properties:
+        pagination_info:
+          type: object
+          properties:
+            total_pages:
+              type: integer
+              example: 2
+            current_page:
+              type: integer
+              example: 1
+            total_results:
+              type: integer
+              example: 23
+    RelationshipLinkage:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+      nullable: true
+    RelationshipLinkageArray:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+    ErrorResponse:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              source:
+                type: object
+                properties:
+                  pointer:
+                    type: string
+                    example: /data/attributes/name
+              detail:
+                type: string
+                example: can't be blank
+    OAuthErrorResponse:
+      type: object
+      description: |
+        Error shape returned by `POST /oauth/token`. Unlike the rest of the API, this does NOT follow the JSON:API `ErrorResponse` format.
+      properties:
+        error:
+          type: string
+          example: invalid_scope
+        error_description:
+          type: string
+        status_code:
+          type: integer
+          description: |
+            Always 401 due to a custom error handler, even when the actual HTTP status code returned is different (e.g. 400 for invalid_scope).
+    ItemResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: book_entry_items
+        attributes:
+          $ref: '#/components/schemas/ItemAttributes'
+        relationships:
+          type: object
+          properties:
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+    ItemAttributes:
+      type: object
+      description: Line item on an invoice, ticket, or simplified invoice
+      properties:
+        concept:
+          type: string
+          description: Name / description of the line item
+        unitary_amount:
+          type: string
+          description: Unit price as decimal string
+        quantity:
+          type: string
+          description: Quantity as decimal string
+        kind:
+          type: string
+          description: Item kind
+        vat_amount:
+          type: string
+          description: Calculated VAT amount
+        retention_amount:
+          type: string
+          description: Calculated retention amount
+        discount_amount:
+          type: string
+          description: Calculated discount amount
+        deductible_vat_amount:
+          type: string
+          description: Deductible VAT amount
+        total_amount:
+          type: string
+          description: Total amount for this line item
+        description:
+          type: string
+          description: Extended description
+        discount_percent:
+          type: string
+          description: Discount percentage as decimal string
+        vat_percent:
+          type: string
+          description: VAT percentage as decimal string
+        retention_percent:
+          type: string
+          description: Retention percentage as decimal string
+        deductible_vat_percent:
+          type: string
+          description: Deductible VAT percentage as decimal string
+        deductible_expense_percent:
+          type: string
+          description: Deductible expense percentage as decimal string
+    ItemWritableAttributes:
+      type: object
+      properties:
+        concept:
+          type: string
+        unitary_amount:
+          type: string
+        quantity:
+          type: number
+        vat_percent:
+          type: number
+        retention_percent:
+          type: number
+        discount_percent:
+          type: number
+        kind:
+          type: string
+        description:
+          type: string
+    UserResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: users
+        attributes:
+          type: object
+          properties:
+            email:
+              type: string
+              format: email
+            name:
+              type: string
+            surnames:
+              type: string
+            locale:
+              type: string
+              example: es
+            sign_up_draft_data:
+              type: object
+              nullable: true
+            is_full_admin:
+              type: boolean
+            accepted_commercial_communication:
+              type: boolean
+              description: Whether the user has opted in to receive commercial communications.
+    ContactAttributes:
+      type: object
+      properties:
+        name:
+          type: string
+        tax_id:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        address:
+          type: string
+        town:
+          type: string
+        zip_code:
+          type: string
+        country_code:
+          type: string
+          example: ES
+        total_paid_incomes:
+          type: string
+        total_unpaid_incomes:
+          type: string
+        total_incomes:
+          type: string
+        total_paid_expenses:
+          type: string
+        total_unpaid_expenses:
+          type: string
+        total_expenses:
+          type: string
+        client_number:
+          type: string
+          nullable: true
+        supplier_number:
+          type: string
+          nullable: true
+        document_type:
+          type:
+            - string
+            - 'null'
+          enum:
+            - NIF
+            - passport
+            - official_id_from_residence_country
+            - residence_permit
+            - other
+            - none
+            - null
+          description: Type of identification document for `tax_id`. See the Contacts section for validation rules.
+        is_client:
+          type: boolean
+        is_supplier:
+          type: boolean
+        is_supplier_of_direct_goods:
+          type: boolean
+        bank_account_number:
+          type: string
+          nullable: true
+        bank_account_swift_bic:
+          type: string
+          nullable: true
+        deletable:
+          type: boolean
+          description: |
+            Whether the current API caller has permission to delete this contact.
+            Computed per-request from the caller's abilities (not a persistent flag);
+            typically `true` when the contact has no associated book entries and the
+            caller can destroy it.
+        account_code:
+          type: string
+          nullable: true
+          description: |
+            Accounting ledger code assigned to this contact (client or supplier account, depending on context).
+    ContactResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: contacts
+        attributes:
+          $ref: '#/components/schemas/ContactAttributes'
+    ContactCreateWritable:
+      description: Creation payload. Same fields as `ContactWritable`, with the required attributes enforced on creation.
+      allOf:
+        - $ref: '#/components/schemas/ContactWritable'
+        - type: object
+          properties:
+            attributes:
+              type: object
+              required:
+                - name
+                - country_code
+    ContactWritable:
+      type: object
+      required:
+        - type
+        - attributes
+      properties:
+        type:
+          type: string
+          const: contacts
+        attributes:
+          type: object
+          properties:
+            name:
+              type: string
+            tax_id:
+              type: string
+            phone:
+              type: string
+            email:
+              type: string
+              format: email
+            address:
+              type: string
+            town:
+              type: string
+            zip_code:
+              type: string
+            country_code:
+              type: string
+            client_number:
+              type: string
+            supplier_number:
+              type: string
+            employee_number:
+              type: string
+            a3_nom_id:
+              type: string
+            is_supplier_of_direct_goods:
+              type: boolean
+            description:
+              type: string
+            bank_account_number:
+              type: string
+            bank_account_swift_bic:
+              type: string
+            document_type:
+              type:
+                - string
+                - 'null'
+              enum:
+                - NIF
+                - passport
+                - official_id_from_residence_country
+                - residence_permit
+                - other
+                - none
+                - null
+              description: Type of identification document for `tax_id`. See the Contacts section for validation rules.
+            pdf_language:
+              type: string
+              description: Language used when rendering PDF documents for this contact.
+            incomes_due_date:
+              type: string
+              description: Default due-date preference applied to income documents issued to this contact.
+            incomes_payment_method:
+              type: string
+              description: Default payment method applied to income documents issued to this contact.
+            equivalence_subcharge:
+              type: boolean
+              description: Whether equivalence surcharge applies by default for this contact.
+            expenses_payment_method:
+              type: string
+              description: Default payment method applied to expense documents received from this contact.
+            expenses_due_date:
+              type: string
+              description: Default due-date preference applied to expense documents received from this contact.
+            contact_analytic_value_ids:
+              type: string
+              description: Comma-separated list of analytic value IDs to associate with the contact (e.g. "12,34").
+        relationships:
+          type: object
+          properties:
+            expense_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+              description: Default accounting category applied to expense documents for this contact.
+            expense_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+              description: Default accounting subcategory applied to expense documents for this contact.
+            income_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+              description: Default accounting category applied to income documents for this contact.
+            income_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+              description: Default accounting subcategory applied to income documents for this contact.
+    BookEntryAttributes:
+      type: object
+      properties:
+        number:
+          type: string
+          nullable: true
+        issue_date:
+          type: string
+          format: date
+        due_dates:
+          type: array
+          items:
+            type: string
+            format: date
+          nullable: true
+        due_date_intervals:
+          type: array
+          items:
+            type: integer
+          description: Due date intervals in days from issue date. Empty array when none are set.
+        paid_at:
+          type: string
+          format: date
+          nullable: true
+        payment_method:
+          type: string
+          nullable: true
+        account_number_and_swift_bic:
+          type:
+            - string
+            - 'null'
+          description: Bank account number and SWIFT/BIC code
+        bizum_phone_or_code:
+          type:
+            - string
+            - 'null'
+        payment_status:
+          type: string
+          enum:
+            - paid
+            - pending
+            - due
+          description: |
+            `paid` when fully paid; `due` when overdue (the last due date has passed, or for paysheets the paysheet month has ended); `pending` otherwise.
+        total_amount:
+          type: string
+        tags:
+          type: string
+          description: Comma-separated list of tag names (e.g. "vip client,important").
+        issuing_name:
+          type: string
+        issuing_tax_id:
+          type: string
+        issuing_address:
+          type: string
+          nullable: true
+        issuing_phone:
+          type: string
+          nullable: true
+        issuing_town:
+          type: string
+          nullable: true
+        issuing_zip_code:
+          type: string
+          nullable: true
+        issuing_country_code:
+          type: string
+          nullable: true
+        recipient_name:
+          type: string
+          nullable: true
+        recipient_tax_id:
+          type: string
+          nullable: true
+        recipient_address:
+          type: string
+          nullable: true
+        recipient_phone:
+          type: string
+          nullable: true
+        recipient_town:
+          type: string
+          nullable: true
+        recipient_zip_code:
+          type: string
+          nullable: true
+        recipient_country_code:
+          type: string
+          nullable: true
+        accounting_account_code:
+          type: string
+          nullable: true
+          description: |
+            Full accounting ledger code for this document's main accounting category/subcategory.
+        detailed_amounts:
+          type: object
+          description: |
+            Breakdown of the document's totals into accounting/tax components. Only present when the `with_detailed_amounts` query parameter is sent (any value, including empty, enables it).
+          properties:
+            user_amount_without_taxes:
+              type: string
+            user_vat_amount:
+              type: string
+            user_equalization_tax_amount:
+              type: string
+            user_income_tax_amount:
+              type: string
+            user_total_amount:
+              type: string
+            expense_amount:
+              type: string
+            non_deductible_expense_amount:
+              type: string
+            income_amount:
+              type: string
+            input_vat_amount:
+              type: string
+            non_deductible_input_vat_amount:
+              type: string
+            non_deductible_assets_vat_amount:
+              type: string
+            non_computable_input_vat_amount:
+              type: string
+            output_vat_amount:
+              type: string
+            input_equalization_tax_amount:
+              type: string
+            output_equalization_tax_amount:
+              type: string
+            income_tax_withheld_amount:
+              type: string
+            income_tax_deducted_amount:
+              type: string
+            assets_amount:
+              type: string
+            non_deductible_assets_amount:
+              type: string
+            disbursements_amount:
+              type: string
+    BookEntryResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          description: The specific type (invoices, tickets, simplified_invoices, additional_incomes, paysheets)
+        attributes:
+          allOf:
+            - $ref: '#/components/schemas/BookEntryAttributes'
+            - type: object
+              properties:
+                operation_date:
+                  type:
+                    - string
+                    - 'null'
+                  format: date
+                  description: |
+                    Date on which the operation took place (delivery of goods or provision of services). It is always on or before `issue_date`. Falls back to `issue_date` when no operation date has been set, so it is only `null` on drafts that have no `issue_date` yet. Only present on income invoices and income simplified invoices (omitted for expenses, additional incomes and paysheets).
+        relationships:
+          type: object
+          properties:
+            items:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            contact:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            amending_invoices:
+              allOf:
+                - $ref: '#/components/schemas/RelationshipLinkageArray'
+              description: Invoices that rectify this one. Only present on invoices.
+            amended_invoice:
+              allOf:
+                - $ref: '#/components/schemas/RelationshipLinkage'
+              description: The invoice this one rectifies (`type` `invoices`). Only present on invoices.
+            amending_tickets:
+              allOf:
+                - $ref: '#/components/schemas/RelationshipLinkageArray'
+              description: Tickets that rectify this one. Only present on tickets.
+            amended_ticket:
+              allOf:
+                - $ref: '#/components/schemas/RelationshipLinkage'
+              description: |
+                The ticket this one rectifies (`type` `tickets`, simplified invoices included). Only present on tickets.
+    TicketAttributes:
+      allOf:
+        - $ref: '#/components/schemas/BookEntryAttributes'
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - income
+                - expenses
+            total_amount_without_taxes:
+              type: string
+            vat_amount:
+              type: string
+            retention_amount:
+              type: string
+            notes:
+              type: string
+              nullable: true
+            operation_date:
+              type:
+                - string
+                - 'null'
+              format: date
+              description: |
+                Date on which the operation took place (delivery of goods or provision of services). It is always on or before `issue_date`. Falls back to `issue_date` when no operation date has been set, so it is only `null` on drafts that have no `issue_date` yet. Only present on income tickets (omitted for expense tickets and additional incomes).
+            download_pdf_url:
+              type: string
+              format: uri
+              nullable: true
+              description: Only present on income tickets.
+            ephemeral_open_download_pdf_url:
+              type: string
+              format: uri
+              nullable: true
+              description: Only present on income tickets.
+    TicketResource:
+      type: object
+      description: |
+        A ticket (simplified invoices included) as embedded in the `included` array, e.g. the rectified document sideloaded through `amended_ticket` on `book_entries` or `amended_simplified_invoice` on `simplified_invoices`.
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: tickets
+        attributes:
+          $ref: '#/components/schemas/TicketAttributes'
+        relationships:
+          type: object
+          properties:
+            numeration:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            items:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            amending_tickets:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            amended_ticket:
+              $ref: '#/components/schemas/RelationshipLinkage'
+    InvoiceAttributes:
+      allOf:
+        - $ref: '#/components/schemas/BookEntryAttributes'
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - income
+                - expenses
+            total_amount_without_taxes:
+              type: string
+            vat_amount:
+              type: string
+            retention_amount:
+              type: string
+            last_sent_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: |
+                ISO 8601 date-time of the last time the invoice was sent. Note that on create/update this field is sent as a Unix timestamp in seconds.
+            notes:
+              type: string
+              nullable: true
+            operation_date:
+              type:
+                - string
+                - 'null'
+              format: date
+              description: |
+                Date on which the operation took place (delivery of goods or provision of services). It is always on or before `issue_date`. Falls back to `issue_date` when no operation date has been set, so it is only `null` on drafts that have no `issue_date` yet. Only present when `kind` is `income` (omitted for expenses).
+            stage:
+              type: string
+              enum:
+                - noop
+                - draft
+                - final
+                - sent_aeat
+                - approved_with_errors_aeat
+                - approved_aeat
+                - rejected_aeat
+              description: Verifactu stage. Only present when `kind` is `income` (omitted for expenses).
+            concepts:
+              type: array
+              items:
+                type: string
+              description: |
+                Distinct line item concepts on this invoice, in item order. Derived from the invoice's items and kept in sync automatically — not directly writable.
+            download_pdf_url:
+              type: string
+              format: uri
+              nullable: true
+              description: Only present when `kind` is `income` (omitted for expenses).
+            ephemeral_open_download_pdf_url:
+              type: string
+              format: uri
+              nullable: true
+              description: Only present when `kind` is `income` (omitted for expenses).
+    InvoiceResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: invoices
+        attributes:
+          $ref: '#/components/schemas/InvoiceAttributes'
+        relationships:
+          type: object
+          properties:
+            contact:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            numeration:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            items:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            amending_invoices:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            amended_invoice:
+              $ref: '#/components/schemas/RelationshipLinkage'
+    InvoiceCreateWritable:
+      description: |
+        Creation payload. Same fields as `InvoiceWritable`. `kind` is required, and `issue_date` is required for expenses. `issue_date` is optional for income documents, which start as a draft and get their date on finalization. For income documents, `number`/`filing_number` and `issue_date` must be sent together (400 otherwise), except on non-Verifactu accounts that send `issue_date` with a `numeration` series.
+      allOf:
+        - $ref: '#/components/schemas/InvoiceWritable'
+        - type: object
+          required:
+            - attributes
+          properties:
+            attributes:
+              type: object
+              required:
+                - kind
+              if:
+                properties:
+                  kind:
+                    const: expenses
+                required:
+                  - kind
+              then:
+                required:
+                  - issue_date
+    InvoiceWritable:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: invoices
+        attributes:
+          type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - income
+                - expenses
+              description: Whether this is an income or expense invoice (REQUIRED)
+            issue_date:
+              type: string
+              format: date
+              description: Issue date (REQUIRED)
+            operation_date:
+              type:
+                - string
+                - 'null'
+              format: date
+              description: |
+                Date on which the operation took place (delivery of goods or provision of services). It must be on or before `issue_date`. Optional: on creation it defaults to `issue_date` when not sent (drafts without `issue_date` get it once they are dated), and sending `null` resets it to `issue_date`. On update, leaving it out keeps the current value, even if `issue_date` changes. A date later than `issue_date` returns 422. Only applicable when `kind` is `income` (ignored for expenses). Unlike `issue_date`, it can still be changed once the invoice is finalized, and it is silently ignored once it has been sent to AEAT. Changing it returns 422 once the invoice has been exported to accounting, included in a submitted tax model or locked by the bookkeeper (for users other than the bookkeeper managing the account, locked documents ignore it — see the update endpoint). Credit notes take the operation date of the rectified invoice unless one is sent. For an invoice to an intracommunity contact (EU, outside Spain) it is required: omitting it or sending `null` returns 422, unless the account is managed by the API user or belongs to a bookkeeper.
+            number:
+              type: string
+              nullable: true
+              description: |
+                Invoice number. For outbound (income) invoices this is the internal filing number/reference; for inbound (expense) invoices this is the supplier's own external reference. `complete_number` takes priority over `number` when both are sent.
+            complete_number:
+              type: string
+              nullable: true
+              description: |
+                Full invoice number including prefix (e.g. "INV-2024-001"), authoritative when present. For outbound invoices, sets the invoice's internal number directly (overriding `number` if both are sent). For inbound invoices, sets the internal number while `number` is stored as the supplier's external reference.
+            filing_number:
+              type: string
+              nullable: true
+              description: |
+                Legacy per-numeration-series ordinal (a positive integer, sent as a string). Only meaningful together with an explicit numeration series: the final `number` is then derived from the series prefix plus this ordinal. A non-integer value is treated the same as `number`. Distinct from `complete_number`, which replaces `number` itself rather than this series-ordinal role. Kept for backward compatibility with historical/manually-numbered entries; prefer `number` / `complete_number` otherwise. Only accepted on creation — ignored if sent on an update.
+            due_dates:
+              type: array
+              items:
+                type: string
+                format: date
+            due_date_intervals:
+              type: array
+              items:
+                type: integer
+              description: Due date intervals in days from issue date
+            paid_at:
+              type: string
+              format: date
+              nullable: true
+            payment_method:
+              type: string
+            tags:
+              type: string
+              description: Comma-separated list of tag names (e.g. "vip client,important").
+            notes:
+              type: string
+            last_sent_at:
+              type:
+                - integer
+                - 'null'
+              example: 1457364458
+              description: |
+                Unix timestamp in seconds of the last time the invoice was sent. Responses return this field as an ISO 8601 date-time string.
+            equivalence_surcharge:
+              type: boolean
+              description: Whether equivalence surcharge applies
+            credit_note_reason:
+              type: string
+              enum:
+                - R1
+                - R2
+                - R3
+                - R4
+                - R5
+                - R6
+                - R7
+                - R8
+              description: Reason code for credit notes
+            exempt_reason:
+              type: string
+              enum:
+                - R1
+                - R2
+                - R3
+              description: Reason code for VAT exemption
+            collection_type:
+              type: string
+              enum:
+                - R1
+                - R2
+                - R3
+                - R4
+                - none
+              description: Collection type
+            canary_island_special_zone:
+              type: string
+              enum:
+                - r1
+                - r2
+                - r3
+                - none
+              description: Canary Island special zone indicator. Required for Canary Island owners when all items have 0% VAT.
+            account_number_and_swift_bic:
+              type: string
+              description: Bank account number and SWIFT/BIC code
+        relationships:
+          type: object
+          properties:
+            contact:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            numeration:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            attachments:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            project:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            book_entry_draft:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            items:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        description: |
+                          ID of an existing item to update in place. Items sent without `id` (or with an `id` that does not belong to the document) are created. When `items` is sent, existing items not included in the array are deleted. An updated item's `accounting_category` and `accounting_subcategory` are cleared unless they are sent again.
+                      type:
+                        type: string
+                        example: book_entry_items
+                        description: Not validated by the API.
+                      attributes:
+                        $ref: '#/components/schemas/ItemWritableAttributes'
+                      relationships:
+                        type: object
+                        properties:
+                          accounting_category:
+                            $ref: '#/components/schemas/RelationshipLinkage'
+                          accounting_subcategory:
+                            $ref: '#/components/schemas/RelationshipLinkage'
+    SimplifiedInvoiceAttributes:
+      allOf:
+        - $ref: '#/components/schemas/BookEntryAttributes'
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - income
+                - expenses
+            total_amount_without_taxes:
+              type: string
+            vat_amount:
+              type: string
+            retention_amount:
+              type: string
+            notes:
+              type: string
+              nullable: true
+            operation_date:
+              type:
+                - string
+                - 'null'
+              format: date
+              description: |
+                Date on which the operation took place (delivery of goods or provision of services). It is always on or before `issue_date`. Falls back to `issue_date` when no operation date has been set, so it is only `null` on drafts that have no `issue_date` yet. Only present when `kind` is `income` (omitted for expenses and additional incomes).
+            stage:
+              type: string
+              enum:
+                - noop
+                - draft
+                - final
+                - sent_aeat
+                - approved_with_errors_aeat
+                - approved_aeat
+                - rejected_aeat
+              description: Verifactu stage. Only present when `kind` is `income` (omitted for expenses).
+            download_pdf_url:
+              type: string
+              format: uri
+              nullable: true
+              description: Only present when `kind` is `income` (omitted for expenses).
+            ephemeral_open_download_pdf_url:
+              type: string
+              format: uri
+              description: Only present when `kind` is `income` (omitted for expenses).
+    SimplifiedInvoiceResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: simplified_invoices
+        attributes:
+          $ref: '#/components/schemas/SimplifiedInvoiceAttributes'
+        relationships:
+          type: object
+          properties:
+            numeration:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            items:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            amending_simplified_invoices:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            amended_simplified_invoice:
+              $ref: '#/components/schemas/RelationshipLinkage'
+    SimplifiedInvoiceCreateWritable:
+      description: |
+        Creation payload. Same fields as `SimplifiedInvoiceWritable`. `kind` is required, and `issue_date` is required for expenses. `issue_date` is optional for income documents, which start as a draft and get their date on finalization. For income documents, `number`/`filing_number` and `issue_date` must be sent together (400 otherwise), except on non-Verifactu accounts that send `issue_date` with a `numeration` series. Income simplified invoices also need a `contact` relationship or a `recipient_name` (422 otherwise).
+      allOf:
+        - $ref: '#/components/schemas/SimplifiedInvoiceWritable'
+        - type: object
+          required:
+            - attributes
+          properties:
+            attributes:
+              type: object
+              required:
+                - kind
+              if:
+                properties:
+                  kind:
+                    const: expenses
+                required:
+                  - kind
+              then:
+                required:
+                  - issue_date
+    SimplifiedInvoiceWritable:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: simplified_invoices
+        attributes:
+          type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - income
+                - expenses
+            issue_date:
+              type: string
+              format: date
+            operation_date:
+              type:
+                - string
+                - 'null'
+              format: date
+              description: |
+                Date on which the operation took place (delivery of goods or provision of services). It must be on or before `issue_date`. Optional: on creation it defaults to `issue_date` when not sent (drafts without `issue_date` get it once they are dated), and sending `null` resets it to `issue_date`. On update, leaving it out keeps the current value, even if `issue_date` changes. A date later than `issue_date` returns 422. Only applicable when `kind` is `income` (ignored for expenses). Unlike `issue_date`, it can still be changed once the simplified invoice is finalized, and it is silently ignored once it has been sent to AEAT. Changing it returns 422 once the simplified invoice has been exported to accounting, included in a submitted tax model or locked by the bookkeeper (for users other than the bookkeeper managing the account, locked documents ignore it — see the update endpoint). Credit notes take the operation date of the rectified simplified invoice unless one is sent.
+            number:
+              type: string
+              nullable: true
+              description: |
+                Invoice number. For outbound (income) invoices this is the internal filing number/reference; for inbound (expense) invoices this is the supplier's own external reference. `complete_number` takes priority over `number` when both are sent.
+            complete_number:
+              type: string
+              nullable: true
+              description: |
+                Full simplified invoice number including prefix, authoritative when present (overrides `number` if both are sent).
+            filing_number:
+              type: string
+              nullable: true
+              description: |
+                Legacy per-numeration-series ordinal (a positive integer, sent as a string). Only meaningful together with an explicit numeration series: the final `number` is then derived from the series prefix plus this ordinal. A non-integer value is treated the same as `number`. Distinct from `complete_number`, which replaces `number` itself rather than this series-ordinal role. Kept for backward compatibility with historical/manually-numbered entries; prefer `number` / `complete_number` otherwise. Only accepted on creation — ignored if sent on an update.
+            due_dates:
+              type: array
+              items:
+                type: string
+                format: date
+            paid_at:
+              type: string
+              format: date
+              nullable: true
+            payment_method:
+              type: string
+            tags:
+              type: string
+              description: Comma-separated list of tag names (e.g. "vip client,important").
+            notes:
+              type: string
+            recipient_name:
+              type: string
+              description: Recipient (customer) name. Applicable when `kind` is `income` (outbound).
+            target_country:
+              type: string
+              description: Target country code. Applicable when `kind` is `income` (outbound).
+        relationships:
+          type: object
+          properties:
+            contact:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            numeration:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            attachments:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            items:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        description: |
+                          ID of an existing item to update in place. Items sent without `id` (or with an `id` that does not belong to the document) are created. When `items` is sent, existing items not included in the array are deleted. An updated item's `accounting_category` and `accounting_subcategory` are cleared unless they are sent again.
+                      type:
+                        type: string
+                        example: book_entry_items
+                        description: Not validated by the API.
+                      attributes:
+                        $ref: '#/components/schemas/ItemWritableAttributes'
+                      relationships:
+                        type: object
+                        properties:
+                          accounting_category:
+                            $ref: '#/components/schemas/RelationshipLinkage'
+                          accounting_subcategory:
+                            $ref: '#/components/schemas/RelationshipLinkage'
+    AdditionalIncomeAttributes:
+      allOf:
+        - $ref: '#/components/schemas/BookEntryAttributes'
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - income
+                - expenses
+            total_amount_without_taxes:
+              type: string
+            vat_amount:
+              type: string
+            retention_amount:
+              type: string
+            notes:
+              type: string
+              nullable: true
+    AdditionalIncomeResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: additional_incomes
+        attributes:
+          $ref: '#/components/schemas/AdditionalIncomeAttributes'
+        relationships:
+          type: object
+          properties:
+            numeration:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            items:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+    AdditionalIncomeCreateWritable:
+      description: |
+        Creation payload. Same fields as `AdditionalIncomeWritable`. `issue_date` and `recipient_name` are required, and `number`/`filing_number` must be sent together with `issue_date` (400 otherwise), except on non-Verifactu accounts that send `issue_date` with a `numeration` series. Additional incomes cannot have a `contact` relationship.
+      allOf:
+        - $ref: '#/components/schemas/AdditionalIncomeWritable'
+        - type: object
+          required:
+            - attributes
+          properties:
+            attributes:
+              type: object
+              required:
+                - issue_date
+                - recipient_name
+    AdditionalIncomeWritable:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: additional_incomes
+        attributes:
+          type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - income
+              description: |
+                Additional incomes are always outbound (income) documents — the API ignores this field's value and always creates an `income` (outbound) entry, even if `expenses` is sent.
+            issue_date:
+              type: string
+              format: date
+            number:
+              type: string
+              nullable: true
+            complete_number:
+              type: string
+              nullable: true
+              description: |
+                Full additional income number including prefix, authoritative when present (overrides `number` if both are sent).
+            filing_number:
+              type: string
+              nullable: true
+              description: |
+                Legacy per-numeration-series ordinal (a positive integer, sent as a string). Only meaningful together with an explicit numeration series: the final `number` is then derived from the series prefix plus this ordinal. A non-integer value is treated the same as `number`. Distinct from `complete_number`, which replaces `number` itself rather than this series-ordinal role. Kept for backward compatibility with historical/manually-numbered entries; prefer `number` / `complete_number` otherwise. Only accepted on creation — ignored if sent on an update.
+            due_dates:
+              type: array
+              items:
+                type: string
+                format: date
+            paid_at:
+              type: string
+              format: date
+              nullable: true
+            payment_method:
+              type: string
+            tags:
+              type: string
+              description: Comma-separated list of tag names (e.g. "vip client,important").
+            notes:
+              type: string
+            recipient_name:
+              type: string
+              description: Recipient (customer) name.
+            target_country:
+              type: string
+              description: Target country code.
+        relationships:
+          type: object
+          properties:
+            numeration:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            attachments:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            items:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        description: |
+                          ID of an existing item to update in place. Items sent without `id` (or with an `id` that does not belong to the document) are created. When `items` is sent, existing items not included in the array are deleted. An updated item's `accounting_category` and `accounting_subcategory` are cleared unless they are sent again.
+                      type:
+                        type: string
+                        example: book_entry_items
+                        description: Not validated by the API.
+                      attributes:
+                        $ref: '#/components/schemas/ItemWritableAttributes'
+                      relationships:
+                        type: object
+                        properties:
+                          accounting_category:
+                            $ref: '#/components/schemas/RelationshipLinkage'
+                          accounting_subcategory:
+                            $ref: '#/components/schemas/RelationshipLinkage'
+    PaysheetAttributes:
+      allOf:
+        - $ref: '#/components/schemas/BookEntryAttributes'
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - expenses
+              description: Paysheets are always inbound documents, so `kind` is always `expenses`.
+            net_pay:
+              type: string
+            gross_pay:
+              type: string
+            employee_ss_amount:
+              type: string
+            employee_retention:
+              type: string
+            company_ss_amount:
+              type: string
+            retention_amount:
+              type: string
+    PaysheetResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: paysheets
+        attributes:
+          $ref: '#/components/schemas/PaysheetAttributes'
+        relationships:
+          type: object
+          properties:
+            contact:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+    PaysheetCreateWritable:
+      description: |
+        Creation payload. Same fields as `PaysheetWritable`. `issue_date` and the `contact` relationship (the employee, who must have a `tax_id`) are required. `kind` is optional and ignored: paysheets are always `expenses`.
+      allOf:
+        - $ref: '#/components/schemas/PaysheetWritable'
+        - type: object
+          required:
+            - attributes
+            - relationships
+          properties:
+            attributes:
+              type: object
+              required:
+                - issue_date
+            relationships:
+              type: object
+              required:
+                - contact
+    PaysheetWritable:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: paysheets
+        attributes:
+          type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - expenses
+              description: Paysheets are always inbound documents, so `kind` is always `expenses`.
+            issue_date:
+              type: string
+              format: date
+            paid_at:
+              type: string
+              format: date
+              nullable: true
+            payment_method:
+              type: string
+            tags:
+              type: string
+              description: Comma-separated list of tag names (e.g. "vip client,important").
+            net_pay:
+              type: number
+              description: Net pay amount
+            employee_ss_amount:
+              type: number
+              description: Employee social security amount
+            employee_retention:
+              type: number
+              description: Employee retention amount
+            company_ss_amount:
+              type: number
+              description: Company social security amount
+            account_number_and_swift_bic:
+              type: string
+              description: Bank account number and SWIFT/BIC code
+        relationships:
+          type: object
+          properties:
+            contact:
+              $ref: '#/components/schemas/RelationshipLinkage'
+              description: The employee (required).
+            numeration:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            accounting_subcategory:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            project:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            book_entry_draft:
+              $ref: '#/components/schemas/RelationshipLinkage'
+            attachments:
+              $ref: '#/components/schemas/RelationshipLinkageArray'
+            items:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        description: |
+                          ID of an existing item to update in place. Items sent without `id` (or with an `id` that does not belong to the document) are created. When `items` is sent, existing items not included in the array are deleted.
+                      type:
+                        type: string
+                        example: book_entry_items
+                        description: Not validated by the API.
+                      attributes:
+                        $ref: '#/components/schemas/ItemWritableAttributes'
+    NumberingSeriesAttributes:
+      type: object
+      properties:
+        prefix:
+          type: string
+          example: F-
+        default:
+          type: boolean
+        amending:
+          type: boolean
+        deletable:
+          type: boolean
+        applicable_to:
+          type: string
+          nullable: true
+        is_valid:
+          type: boolean
+          readOnly: true
+          description: |
+            Whether the prefix is blank or uses only printable ASCII characters (required on Verifactu accounts).
+        applies_to:
+          type: string
+          enum:
+            - new
+            - existing
+          nullable: true
+    NumberingSeriesResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: numbering_series
+        attributes:
+          $ref: '#/components/schemas/NumberingSeriesAttributes'
+    NumberingSeriesCreateWritable:
+      type: object
+      required:
+        - type
+        - attributes
+      properties:
+        type:
+          type: string
+          const: numbering_series
+        attributes:
+          type: object
+          required:
+            - prefix
+          properties:
+            prefix:
+              type: string
+              description: Series prefix, unique per owner. Cannot be changed after creation.
+            applicable_to:
+              type: string
+              enum:
+                - invoices
+                - tickets
+                - additional_incomes
+                - budgets
+                - orders
+                - delivery_notes
+              description: |
+                Restricts the series to a specific document type. Stored internally as `identifier` (singularized). Simplified invoices use `tickets` series.
+            default:
+              type: boolean
+            amending:
+              type: boolean
+              description: Whether this series is used for amending (counter) documents.
+            applies_to:
+              type: string
+              enum:
+                - new
+                - existing
+              description: |
+                Defaults to `new` when omitted. Forced to `existing` for `invoices` and `tickets` series on management-mode accounts. Any other value returns 400.
+    NumberingSeriesUpdateWritable:
+      type: object
+      required:
+        - type
+        - attributes
+      properties:
+        type:
+          type: string
+          const: numbering_series
+        attributes:
+          type: object
+          properties:
+            applicable_to:
+              type: string
+              enum:
+                - invoices
+                - tickets
+                - additional_incomes
+                - budgets
+                - orders
+                - delivery_notes
+            default:
+              type: boolean
+            amending:
+              type: boolean
+              description: Whether this series is used for amending (counter) documents.
+            applies_to:
+              type: string
+              enum:
+                - new
+                - existing
+              description: |
+                Can be changed from `new` to `existing`, but not back: changing to `new` returns 403. Sending the current value is a no-op.
+    AccountingCategoryAttributes:
+      type: object
+      properties:
+        name:
+          type: string
+        prefix:
+          type: integer
+        kind:
+          type: string
+        accounting_digits_number:
+          type: integer
+          nullable: true
+          description: |
+            Number of digits used in this owner's chart-of-accounts codes (e.g. 8).
+    AccountingCategoryResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: accounting_categories
+        attributes:
+          $ref: '#/components/schemas/AccountingCategoryAttributes'
+    AccountingSubcategoryAttributes:
+      type: object
+      properties:
+        name:
+          type: string
+        suffix:
+          type: string
+    AccountingSubcategoryResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: accounting_subcategories
+        attributes:
+          $ref: '#/components/schemas/AccountingSubcategoryAttributes'
+        relationships:
+          type: object
+          properties:
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+    AccountingSubcategoryWritable:
+      type: object
+      required:
+        - type
+        - attributes
+      properties:
+        type:
+          type: string
+          const: accounting_subcategories
+        attributes:
+          type: object
+          properties:
+            name:
+              type: string
+              example: Office Supplies
+            suffix:
+              type: string
+              example: '01'
+        relationships:
+          type: object
+          properties:
+            accounting_category:
+              $ref: '#/components/schemas/RelationshipLinkage'
+    AccountingSubcategoryUpdateWritable:
+      type: object
+      required:
+        - type
+        - attributes
+      properties:
+        type:
+          type: string
+          const: accounting_subcategories
+        attributes:
+          type: object
+          properties:
+            name:
+              type: string
+              example: Office Supplies
+            suffix:
+              type: string
+              example: '01'
+    AttachmentResource:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: attachments
+        attributes:
+          type: object
+          properties:
+            url:
+              type: string
+              format: uri
+              description: |
+                URL to the original file. It is pre-signed and expires 10 minutes after the response is generated; request the attachment again to get a fresh one.
+            small_url:
+              type: string
+              format: uri
+              description: URL to the preview-sized version of the file. Expires like `url`.
+            thumbnail_url:
+              type: string
+              format: uri
+              description: URL to the thumbnail-sized version of the file. Expires like `url`.
+        relationships:
+          type: object
+          properties:
+            book_entry:
+              allOf:
+                - $ref: '#/components/schemas/RelationshipLinkage'
+              description: |
+                The document the file is attached to. Its `type` is `invoices`, `tickets` (simplified invoices and additional incomes included) or `paysheets`.
+  responses:
+    Unauthorized:
+      description: Authentication required or token invalid
+      content:
+        application/vnd.quipu.v1+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errors:
+              - detail: Not authorized
+    NotFound:
+      description: Resource not found
+      content:
+        application/vnd.quipu.v1+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errors:
+              - detail: Record not found
+    UnprocessableEntity:
+      description: Validation errors
+      content:
+        application/vnd.quipu.v1+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errors:
+              - source:
+                  pointer: /data/attributes/name
+                detail: can't be blank
+    Forbidden:
+      description: Authenticated but not authorized to perform this action
+      content:
+        application/vnd.quipu.v1+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errors:
+              - detail: You are not authorized to access this resource
+    BadRequest:
+      description: Malformed request (e.g. invalid parameter value)
+      content:
+        application/vnd.quipu.v1+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errors:
+              - detail: Bad request
+    TooManyRequests:
+      description: Rate limit exceeded (5 requests per 5 seconds)
+      content:
+        application/vnd.quipu.v1+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errors:
+              - detail: Rate limit exceeded. Maximum 5 requests per 5 seconds.

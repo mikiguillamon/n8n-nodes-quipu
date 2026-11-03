@@ -1,0 +1,75 @@
+{
+  "name": "Quipu \u2014 Create Income Draft",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a15d3e32-4ad7-4b48-8636-0355848c287e",
+      "name": "When clicking Execute workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "invoices",
+        "operation": "create",
+        "inputMode": "fields",
+        "kind": "income",
+        "fields": {
+          "notes": "Example draft \u2014 review before running"
+        },
+        "relationships": {
+          "contact": {
+            "__rl": true,
+            "mode": "id",
+            "value": "123"
+          }
+        },
+        "sendItems": true,
+        "lineItems": {
+          "items": [
+            {
+              "concept": "Consulting",
+              "unitary_amount": "125.50",
+              "quantity": 1,
+              "additionalFields": {
+                "vat_percent": 21
+              }
+            }
+          ]
+        },
+        "output": "simplified"
+      },
+      "id": "c1036a6f-0ccf-4fcd-a114-ed3e3a25e766",
+      "name": "Quipu",
+      "type": "@mikiguillamon/n8n-nodes-quipu.quipu",
+      "typeVersion": 1,
+      "position": [
+        520,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking Execute workflow": {
+      "main": [
+        [
+          {
+            "node": "Quipu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

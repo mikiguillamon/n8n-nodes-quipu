@@ -1,0 +1,49 @@
+name: Publish
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: publish-quipu
+  cancel-in-progress: false
+  queue: max
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main' && vars.NPM_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Validate release source
+        run: |
+          node <<'JS'
+          const p = require('./package.json');
+          const expected = `git+https://github.com/${process.env.GITHUB_REPOSITORY}.git`;
+          if (p.repository?.url !== expected) throw new Error(`Set package.json repository.url to ${expected} before publishing`);
+          JS
+      - run: npm ci
+      - run: npm run check:contract
+      - run: npm run lint
+      - run: npm test
+      - name: Select the next unpublished version
+        id: release
+        run: node scripts/prepare-release.mjs
+      - run: npm pack --dry-run
+        if: steps.release.outputs.skip != 'true'
+      - name: Publish with provenance
+        if: steps.release.outputs.skip != 'true'
+        run: npm publish --access public --provenance
+      - name: Record release version
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          ALREADY_PUBLISHED: ${{ steps.release.outputs.skip }}
+        run: |
+          echo "Version: $RELEASE_VERSION · Commit: $GITHUB_SHA · Already published: $ALREADY_PUBLISHED" >> "$GITHUB_STEP_SUMMARY"

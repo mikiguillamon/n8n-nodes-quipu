@@ -1,0 +1,61 @@
+{
+  "name": "@mikiguillamon/n8n-nodes-quipu",
+  "version": "0.1.0",
+  "description": "n8n community node for Quipu with guided invoicing, accounting, contacts and attachments.",
+  "license": "MIT",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "quipu",
+    "invoicing",
+    "accounting"
+  ],
+  "author": {
+    "name": "Miki Guillamon",
+    "email": "miguelangel@justforfun.es"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "n8n-node build",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "test": "npm run build && node --test tests/*.test.cjs",
+    "generate:contract": "node scripts/generate-contract.mjs",
+    "check:contract": "node scripts/generate-contract.mjs --check",
+    "prepublishOnly": "npm run lint && npm test && npm run check:contract"
+  },
+  "files": [
+    "dist",
+    "examples",
+    "docs/VALIDATION.md",
+    "docs/api/coverage.md"
+  ],
+  "engines": {
+    "node": "^22.22.0 || >=24.0.0"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "credentials": [
+      "dist/credentials/QuipuOAuth2Api.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Quipu/Quipu.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@n8n/node-cli": "0.55.4",
+    "typescript": "5.9.3",
+    "eslint": "9.39.4",
+    "prettier": "3.8.3",
+    "yaml": "2.8.1",
+    "n8n-workflow": "2.16.0"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "homepage": "https://quipuapp.github.io/api-v1-docs/"
+}

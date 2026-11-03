@@ -1,0 +1,60 @@
+{
+  "name": "Quipu \u2014 List Unpaid Invoices",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "883d054e-004d-4f3f-94b2-1137c111b6e2",
+      "name": "When clicking Execute workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "invoices",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 50,
+        "query": {
+          "filter[kind]": "income",
+          "filter[payment_status]": "unpaid",
+          "include": [
+            "contact",
+            "items"
+          ]
+        },
+        "output": "simplified"
+      },
+      "id": "99519b49-8158-4ef5-8c8d-0e3191012aa7",
+      "name": "Quipu",
+      "type": "@mikiguillamon/n8n-nodes-quipu.quipu",
+      "typeVersion": 1,
+      "position": [
+        520,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking Execute workflow": {
+      "main": [
+        [
+          {
+            "node": "Quipu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}
