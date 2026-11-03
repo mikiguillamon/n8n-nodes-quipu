@@ -57,5 +57,12 @@
   "peerDependencies": {
     "n8n-workflow": "*"
   },
-  "homepage": "https://quipuapp.github.io/api-v1-docs/"
+  "homepage": "https://github.com/mikiguillamon/n8n-nodes-quipu#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikiguillamon/n8n-nodes-quipu.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mikiguillamon/n8n-nodes-quipu/issues"
+  }
 }
